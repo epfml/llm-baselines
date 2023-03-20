@@ -1,0 +1,9 @@
+tiktoken==0.3.0
+torch==2.1.0.dev20230314+cu118
+torchaudio==2.0.0.dev20230314+cu118
+torchvision==0.15.0.dev20230314+cu118
+tornado @ file:///opt/conda/conda-bld/tornado_1662061693373/work
+tqdm @ file:///opt/conda/conda-bld/tqdm_1664392687731/work
+transformers==4.26.1
+urllib3 @ file:///croot/urllib3_1670526988650/work
+wandb==0.13.9
