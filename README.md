@@ -64,7 +64,7 @@ parser.add_argument('--eval_seq_prefix', default="The MLO laboratory is ", type=
 
 You need to give your wandb authorize key in order to send the data to your wandb account. If you start jobs on a server without access to prompt, then you can set the `WANDB_API_KEY` variable within your script:
 
-```
+```bash
 # this is a script that could be executed on a server
 pip install -r requirements.txt # install req.
 WANDB_API_KEY=$YOUR_API_KEY # set wandb key if you want to use wandb
@@ -75,7 +75,7 @@ python ./src/main.py --wandb --wandb_project "my awesome project" --n_layer 7 --
 
 The structure of the project is the following: 
 
-```bash
+```sh
 src/
     main.py         # pick the right data, model, and training function
     data/
