@@ -25,10 +25,6 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
 
     model.train()
 
-    val_loss = None
-    val_acc = None
-    val_perplexity = None
-
     t0 = time.time()
     while itr < iterations:
         for _ in range(acc_steps): # gradient accumulation
