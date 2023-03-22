@@ -19,7 +19,7 @@ from torch.nn import functional as F
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
-    def __init__(self, ndim, bias):
+    def __init__(self, ndim, bias=False):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(ndim))
         self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
@@ -199,7 +199,7 @@ class GPTSparseHeadsQ(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, alpha_th=None, drop_k=None):
+    def forward(self, idx, targets=None, alpha_th=None, drop_k=None, get_logits=False, get_alphas=False):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.sequence_length, f"Cannot forward sequence of length {t}, block size is only {self.config.sequence_length}"
@@ -213,7 +213,7 @@ class GPTSparseHeadsQ(nn.Module):
         for block in self.transformer.h:
             x, l1_penalty, (nhp, nh), alphas = block(x, alpha_th=alpha_th, drop_k=drop_k)
             l1_penalties.append(l1_penalty)
-            alphas_per_layer.append(alphas)
+            #alphas_per_layer.append(alphas)
             num_head_pruned_per_layer.append(nhp)
             num_heads_per_layer.append(nh)
         x = self.transformer.ln_f(x)
@@ -228,6 +228,9 @@ class GPTSparseHeadsQ(nn.Module):
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
             loss, ce_loss, l1_loss = None, torch.zeros(1), torch.zeros(1)
+
+        logits = logits if get_logits else None
+        alphas_per_layer = alphas_per_layer if get_alphas else None
 
         return {'logits': logits, 'loss': loss, 'ce_loss': ce_loss.cpu().item(), 'l1_loss': l1_loss.cpu().item(), 
                 'alphas': alphas_per_layer, 'num_head_pruned_per_layer': num_head_pruned_per_layer, 
@@ -317,7 +320,7 @@ class GPTSparseHeadsQ(nn.Module):
             # if the sequence context is growing too long we must crop it at sequence_length
             idx_cond = idx if idx.size(1) <= self.config.sequence_length else idx[:, -self.config.sequence_length:]
             # forward the model to get the logits for the index in the sequence
-            logits = self(idx_cond, alpha_th=alpha_th, drop_k=drop_k)['logits']
+            logits = self(idx_cond, alpha_th=alpha_th, drop_k=drop_k, get_logits=True)['logits']
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options

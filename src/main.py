@@ -6,7 +6,6 @@ import json
 import copy
 import argparse
 import random
-import hashlib
 import wandb
 
 from models.utils import get_model
@@ -47,7 +46,7 @@ def get_args():
     parser.add_argument('--n_embd', default=384, type=int) # embedding size / hidden size ... 
     parser.add_argument('--sequence_length', default=256, type=int)
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
-    parser.add_argument('--bias', default=True, type=bool)
+    parser.add_argument('--bias', default=False, type=bool)
     parser.add_argument('--no_compile', action='store_true') # if true then model is not compiled 
     # logging params (WandB)
     parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
@@ -87,7 +86,7 @@ def main(args):
     print(f"Num training tokens: {len(data['train'])}")
     print(f"Num validation tokens: {len(data['val'])}")
     
-    model = get_model(args).to(args.device) # takee care of initializing the model if args.use_pretrained != 'none'
+    model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
     
     if args.opt == 'adamw':
         opt = model.configure_optimizers(args.weight_decay, args.lr, (args.beta1, args.beta2), device_type)

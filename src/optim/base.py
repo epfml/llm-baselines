@@ -29,6 +29,7 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
     while itr < iterations:
         for _ in range(acc_steps): # gradient accumulation
             x, y = get_batch(data['train'], sequence_length, batch_size, device=extra_args.device)
+            print(x.shape)
             with ctx:
                 outputs = model(x, targets=y)
 

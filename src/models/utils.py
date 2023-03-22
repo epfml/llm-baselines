@@ -1,6 +1,7 @@
 from .base import GPTBase
 from .sparsehq import GPTSparseHeadsQ
 
+
 def get_model(args):
     """ Return the right model """
     if args.model == 'base':

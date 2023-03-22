@@ -9,6 +9,6 @@ def get_dataset(args):
      contained in its own pythin file. The expected format at the moment is a disctionary of np.memmap
      containing two keys: 'train' and 'val', corresponding to the tokenized training and validation data. """
     if args.dataset == 'wikitext':
-        return get_wikitext_data(device=args.device)
+        return get_wikitext_data()
     else:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")

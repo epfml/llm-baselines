@@ -24,7 +24,7 @@ def eval(model, data_tensor, sequence_length, batch_size, device='cpu', max_num_
     for _ in range(max_num_batches): 
         x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
         with ctx:
-            outputs = model(x, targets=y)
+            outputs = model(x, targets=y, get_logits=True)
         val_loss = outputs['loss']
         loss_list_val.append(val_loss)
         acc_list.append((outputs['logits'].argmax(-1) == y).float().mean())
@@ -45,7 +45,7 @@ def eval_sparse(model, data_tensor, sequence_length, batch_size, device='cpu', m
     for _ in range(max_num_batches): 
         x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
         with ctx:
-            outputs = model(x, targets=y, alpha_th=alpha_th, drop_k=drop_k)
+            outputs = model(x, targets=y, alpha_th=alpha_th, drop_k=drop_k, get_logits=True, get_alphas=True)
         ce_loss_list_val.append(outputs['ce_loss'])
         l1_loss_list_val.append(outputs['l1_loss'])
         acc_list.append((outputs['logits'].argmax(-1) == y).float().mean())
@@ -72,7 +72,7 @@ def eval_sweep_dropk(model, data_tensor, sequence_length, batch_size, n_heads, d
         for _ in range(max_num_batches): 
             x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
             with ctx:
-                outputs = model(x, targets=y, alpha_th=None, drop_k=drop_k)
+                outputs = model(x, targets=y, alpha_th=None, drop_k=drop_k, get_logits=True)
             loss_list_val.append(outputs['ce_loss'])
             acc_list.append((outputs['logits'].argmax(-1) == y).float().mean())
 
@@ -95,7 +95,7 @@ def eval_sweep_alphath(model, data_tensor, sequence_length, batch_size, device='
         for _ in range(max_num_batches): 
             x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
             with ctx:
-                outputs = model(x, targets=y, alpha_th=alpha_th, drop_k=None)
+                outputs = model(x, targets=y, alpha_th=alpha_th, drop_k=None, get_logits=True)
             nph, nh = outputs['num_head_pruned_per_layer'], outputs['num_heads_per_layer']
             frac_heads_pruned = np.sum(nph) / np.sum(nh) # fractions of heads removed given alpha_th
             frac_heads_pruned_list.append(frac_heads_pruned)

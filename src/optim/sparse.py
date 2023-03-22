@@ -19,7 +19,6 @@ def train_sparse(model, opt, data, scheduler, iterations, acc_steps, batch_size,
 
     num_substeps_per_epoch = len(data['train']) // (batch_size * sequence_length)
     
-    torch.cuda.synchronize()
     if not extra_args.no_compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
@@ -30,6 +29,7 @@ def train_sparse(model, opt, data, scheduler, iterations, acc_steps, batch_size,
     while itr < iterations:
         for _ in range(acc_steps): # gradient accumulation
             x, y = get_batch(data['train'], sequence_length, batch_size, device=extra_args.device)
+            print(x.shape)
             with ctx:
                 outputs = model(x, targets=y)
 
@@ -43,7 +43,6 @@ def train_sparse(model, opt, data, scheduler, iterations, acc_steps, batch_size,
         itr += 1
 
         if itr % eval_freq == 0 or itr == iterations: # eval: from here it's pretty much only evaluation, all the training is above 
-            torch.cuda.synchronize()
             t1 = time.time()
             dt = t1 - t0
             epoch = substep//num_substeps_per_epoch
@@ -104,7 +103,6 @@ def train_sparse(model, opt, data, scheduler, iterations, acc_steps, batch_size,
                     wandb.log({f"val-stats/PP-alpha-th-sweep-itr={itr}" : wandb.plot.line(table_pp, "n heads dropped", "perplexity", title=f"Perplexity: alpha-th-sweep-itr={itr}")})
                     
 
-            torch.cuda.synchronize()
             model.train()
             t0 = time.time()
 
