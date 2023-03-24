@@ -67,7 +67,7 @@ You need to give your wandb authorize key in order to send the data to your wand
 ```bash
 # this is a script that could be executed on a server
 pip install -r requirements.txt # install req.
-WANDB_API_KEY=$YOUR_API_KEY # set wandb key if you want to use wandb
+export WANDB_API_KEY="put your authorize key here, to find it: https://wandb.ai/authorize"
 python ./src/main.py --wandb --wandb_project "my awesome project" --n_layer 7 --model base --seed 123
 ```
 
