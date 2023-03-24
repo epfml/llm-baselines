@@ -9,6 +9,7 @@ WIKITEXT_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/wikitext/
 
 
 def get_wikitext_data():
+    """ Inspired from https://github.com/tysam-code/hlb-gpt """
     if not os.path.exists(WIKITEXT_DATA_PATH):
         os.makedirs(WIKITEXT_DATA_PATH, exist_ok=True)
         print("downloading data and tokenizing (1-2 min)")
