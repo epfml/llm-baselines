@@ -29,7 +29,6 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
     while itr < iterations:
         for _ in range(acc_steps): # gradient accumulation
             x, y = get_batch(data['train'], sequence_length, batch_size, device=extra_args.device)
-            print(x.shape)
             with ctx:
                 outputs = model(x, targets=y)
 
@@ -42,7 +41,7 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
         opt.zero_grad(set_to_none=True)
         itr += 1
 
-        if itr % eval_freq == 0 or itr == iterations: # eval
+        if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
             t1 = time.time()
             dt = t1 - t0
             epoch = substep//num_substeps_per_epoch
@@ -72,10 +71,10 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
 
                 if extra_args.eval_seq_prefix != 'none' and (itr % (eval_freq * 5) == 0 or itr == iterations):
                     if text_table is None:
-                        text_table = wandb.Table(columns=["itr", "val-loss", "text"])
+                        text_table = wandb.Table(columns=["itr", "val-pp", "text"])
 
                     out_str = model.generate_from_string(extra_args.eval_seq_prefix, max_new_tokens=40, temperature=0.9, top_k=None)
-                    text_table.add_data(itr, val_loss, out_str)
+                    text_table.add_data(itr, val_perplexity, out_str)
                     wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)}) # why a copy? see github.com/wandb/wandb/issues/2981
 
             model.train()

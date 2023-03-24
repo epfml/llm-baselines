@@ -35,7 +35,9 @@ class CausalSelfAttention(nn.Module):
         assert config.n_embd % config.n_head == 0
         # sparsity parameters
         self.l1_lambda = config.lmbda
+        self.alphas_from = config.alphas_from # either 'x' or 'q'
         self.n_dims_per_head = int(config.n_embd // config.n_head)
+        self.use_sigmoid = config.use_sigmoid
         self.alphas_mlp = nn.Sequential(nn.Linear(config.n_embd, config.n_alpha_mlp), nn.ReLU(), nn.Linear(config.n_alpha_mlp, config.n_head))
         if self.l1_lambda > 0.0: 
             self.alphas_mlp[2].bias.data.fill_(1.0) # init bias to high value so that at first the "gates" are open
@@ -57,7 +59,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.sequence_length, config.sequence_length))
                                         .view(1, 1, config.sequence_length, config.sequence_length))
 
-    def forward(self, x, alpha_th=None, drop_k=None):
+    def forward(self, x, alpha_th=None, drop_k=None, get_alphas=False):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -65,7 +67,11 @@ class CausalSelfAttention(nn.Module):
         # compute alphas
         num_head_pruned, alphas = (0, 0), None
         if self.l1_lambda > 0 or drop_k is not None:
-            alphas = torch.max(torch.min(self.alphas_mlp(q).abs(), torch.ones(1, device=x.device)), torch.zeros(1, device=x.device)) # torch.sigmoid(self.alphas_mlp(q))
+            q_ = q if self.alphas_from == 'q' else x
+            if self.use_sigmoid:
+                alphas = torch.sigmoid(self.alphas_mlp(q_))
+            else:
+                alphas = torch.max(torch.min(self.alphas_mlp(q_).abs(), torch.ones(1, device=x.device)), torch.zeros(1, device=x.device)) 
             l1_penalty = alphas.view(B,-1).abs().sum(dim=-1) # l1 loss computed for each sequence 
             if alpha_th is not None: # then we set the alphas under alpha_th to 0
                 mask = alphas <= alpha_th
@@ -108,6 +114,7 @@ class CausalSelfAttention(nn.Module):
             y = self.resid_dropout(self.c_proj(alphas * y)) # multiply with the alpha values
         else: 
             y = self.resid_dropout(self.c_proj(y))
+        alphas = alphas if get_alphas else None
         return y, l1_penalty, num_head_pruned, alphas
 
 
@@ -137,8 +144,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x, alpha_th=None, drop_k=None):
-        att, l1_penalty, num_head_pruned, alphas = self.attn(self.ln_1(x), alpha_th=alpha_th, drop_k=drop_k)
+    def forward(self, x, alpha_th=None, drop_k=None, get_alphas=False):
+        att, l1_penalty, num_head_pruned, alphas = self.attn(self.ln_1(x), alpha_th=alpha_th, drop_k=drop_k, get_alphas=get_alphas)
         x = x + att
         x = x + self.mlp(self.ln_2(x))
         return x, l1_penalty, num_head_pruned, alphas
@@ -211,7 +218,7 @@ class GPTSparseHeadsQ(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         l1_penalties, alphas_per_layer, num_head_pruned_per_layer, num_heads_per_layer = [], [], [], []
         for block in self.transformer.h:
-            x, l1_penalty, (nhp, nh), alphas = block(x, alpha_th=alpha_th, drop_k=drop_k)
+            x, l1_penalty, (nhp, nh), alphas = block(x, alpha_th=alpha_th, drop_k=drop_k, get_alphas=get_alphas)
             l1_penalties.append(l1_penalty)
             #alphas_per_layer.append(alphas)
             num_head_pruned_per_layer.append(nhp)
