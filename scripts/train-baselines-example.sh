@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /mlodata1/pagliard/llm-baselines
+cd /path/to/your/repo/llm-baselines
 pip install -r requirements.txt
 
 #WANDB_API_KEY=$YOUR_API_KEY 
