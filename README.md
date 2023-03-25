@@ -117,7 +117,7 @@ Trying to get the best perplexity as fast as possible, I settled for using a mod
 * lr: 0.002
 * warmup_percent: 0.02
 
-The training reaches convergence after a bit more than 4 hours (on one V100), with a perplexity around 18.5, which I believe to be good for a non-pretrained model. The figure below shows the evolution of perplexity for two models with and without dropout, showing the importance of dropout. It should be possiblee to reach similar perplexity without dropout with a smaller batch size but this would probably extend the duration of the training. 
+The training reaches convergence after a bit more than 4 hours (on one A100), with a perplexity around 18.5, which I believe to be good for a non-pretrained model. The figure below shows the evolution of perplexity for two models with and without dropout, showing the importance of dropout. It should be possiblee to reach similar perplexity without dropout with a smaller batch size but this would probably extend the duration of the training. 
 
 ![](./assets/pp-wikitext.png)
 
