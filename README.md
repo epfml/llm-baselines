@@ -16,6 +16,8 @@ Run a simple training on the Wikitext dataset:
 python ./src/main.py
 ```
 
+The above command trains a 213.34M parameters model (see the "Results on wikitext" section for more details). The training takes a bit less than 5h on one 40GB A100. It trains for 15k iterations with a batch size of 50x4 (4 gradient accumulation steps), hence a speed of 0.84 iteration per second, or 86k tokens per second. You should reach a perplexity of around 18.5. 
+
 If you don't have so much VRAM:
 
 ```
@@ -105,7 +107,7 @@ Given the above structure, to add your own model, you can just fork the `./src/m
 
 ## Results on wikitext
 
-Trying to get the best perplexity as fast as possible, I settled for using a model with the following parameters:
+Trying to get the best perplexity as fast as possible, I settled for using a model (213.34M parameters) with the following parameters:
 * n_embd: 768
 * n_head: 12
 * dropout: 0.2 (0.1 also works fine)
@@ -117,7 +119,7 @@ Trying to get the best perplexity as fast as possible, I settled for using a mod
 * lr: 0.002
 * warmup_percent: 0.02
 
-The training reaches convergence after a bit more than 4 hours (on one A100), with a perplexity around 18.5, which I believe to be good for a non-pretrained model. The figure below shows the evolution of perplexity for two models with and without dropout, showing the importance of dropout. It should be possiblee to reach similar perplexity without dropout with a smaller batch size but this would probably extend the duration of the training. 
+The training reaches convergence after a bit less than 5 hours (on one 40GB A100), with a perplexity around 18.5, which I believe to be good for a non-pretrained model. The figure below shows the evolution of perplexity for two models with and without dropout, showing the importance of dropout. It should be possiblee to reach similar perplexity without dropout with a smaller batch size but this would probably extend the duration of the training. 
 
 ![](./assets/pp-wikitext.png)
 
