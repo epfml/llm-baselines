@@ -204,7 +204,7 @@ class GPTBase(nn.Module):
         # TODO
         pass
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def get_parameter_group_specs(self):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -250,17 +250,10 @@ class GPTBase(nn.Module):
                                                     % (str(param_dict.keys() - union_params), )
 
         # create the pytorch optimizer object
-        optim_groups = [
-            {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-            {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+        return [
+            {"params": sorted(list(decay))},
+            {"params": sorted(list(no_decay)), "weight_decay": 0.0},
         ]
-        # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
-        use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
-        print(f"using fused AdamW: {use_fused}")
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-
-        return optimizer
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):

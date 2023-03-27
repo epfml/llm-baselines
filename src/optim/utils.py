@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from contextlib import nullcontext
+from contextlib import nullcontext, contextmanager, ExitStack
 
 
 def get_batch(data, seq_length, batch_size, device='cpu'):
@@ -108,3 +108,15 @@ def eval_sweep_alphath(model, data_tensor, sequence_length, batch_size, device='
         y_axis_pp.append(2.71828 ** y_axis_loss[-1])
 
     return x_axis, y_axis_acc, y_axis_pp, y_axis_loss
+
+
+def save_checkpoint(distributed_backend, model, opt, scheduler, itr, ckpt_path, **extra_args):
+
+    checkpoint = dict({
+        'model': distributed_backend.get_raw_model(model).state_dict(),
+        'optimizer': opt.state_dict(),
+        'scheduler': scheduler.state_dict(),
+        'itr': itr,
+    }, **extra_args)
+
+    torch.save(checkpoint, ckpt_path)
