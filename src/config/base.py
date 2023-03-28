@@ -1,5 +1,6 @@
 import argparse
 import torch
+import distributed
 
 def parse_args(base_parser, args, namespace):
     parser = base_parser
