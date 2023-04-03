@@ -24,6 +24,11 @@ If you don't have so much VRAM:
 python ./src/main.py --n_layer 12 --sequence_length 256
 ```
 
+If you have **very** limited resources, try the shakespeare dataset and character-based tokenizer:
+
+```
+python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare --tokenizer=character --device=cpu --vocab_size=0
+```
 
 ## Less quick start
 

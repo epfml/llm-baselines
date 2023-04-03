@@ -8,10 +8,10 @@ def get_batch(data, seq_length, batch_size, device='cpu'):
     ix = torch.randint(len(data) - seq_length, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+seq_length]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+seq_length]).astype(np.int64)) for i in ix])
-    if device != 'cpu':
+    if "cuda" in torch.device(device).type:
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-        #x, y = x.to(device), y.to(device)
+        x = x.pin_memory().to(device, non_blocking=True)
+        y = y.pin_memory().to(device, non_blocking=True)
     return x, y
 
 
