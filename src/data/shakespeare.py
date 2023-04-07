@@ -1,18 +1,25 @@
 import os
+from string import ascii_letters, digits, punctuation
 
 import numpy as np
 import requests
 
-from .tokenizing import encode
+
+_char_decode = dict(enumerate(sorted(set(ascii_letters + digits + punctuation + " \n"))))
+_char_encode = {char: i for i, char in _char_decode.items()}
+
+
+def char_tknzr(txt: str):
+    return [_char_encode[char] for char in txt if char in _char_encode]
 
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets", "shakespeare")
 
-def get_shakespeare_data(tokenizer: str):
+def get_shakespeare_data():
     """Inspired from https://github.com/karpathy/nanoGPT/"""
     raw_path = os.path.join(DATA_PATH, "raw.txt")
-    train_path = os.path.join(DATA_PATH, f"train_{tokenizer}.npy")
-    test_path = os.path.join(DATA_PATH, f"test_{tokenizer}.npy")
+    train_path = os.path.join(DATA_PATH, f"train.npy")
+    test_path = os.path.join(DATA_PATH, f"test.npy")
 
     # if path is not even there, download all data
     if not os.path.exists(DATA_PATH):
@@ -31,8 +38,8 @@ def get_shakespeare_data(tokenizer: str):
             text = "".join(f.readlines())
         i = int(0.8*len(text))
         # encode text
-        x = np.array(encode(text[:i], tokenizer), dtype=np.uint16)
-        x_test = np.array(encode(text[i:], tokenizer), dtype=np.uint16)
+        x = np.array(char_tknzr(text[:i]), dtype=np.uint16)
+        x_test = np.array(char_tknzr(text[i:]), dtype=np.uint16)
         # map memory
         mem = np.memmap(train_path, dtype=np.uint16, mode="w+", shape=x.shape)
         mem[:] = x

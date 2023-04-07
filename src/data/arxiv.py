@@ -6,14 +6,15 @@ from typing import Optional
 from multiprocessing import Pool
 from tempfile import NamedTemporaryFile
 from subprocess import Popen, TimeoutExpired, PIPE
+from typing import Tuple, List
 
 import numpy as np
 import requests
 from tqdm.auto import tqdm
+import tiktoken
 
-from .tokenizing import encode
 
-def convert_to_markdown(args: tuple[Path, Path]):
+def convert_to_markdown(args: Tuple[Path, Path]):
     texfile, mdroot = args
     mdfile = mdroot/f"{texfile.name}.md"
     with Popen(["pandoc", "--wrap=none", "--from", "latex", texfile,
@@ -49,7 +50,8 @@ def fetch_arxiv(root: Path, year: int):
             pass
 
 
-def tokenize_arxiv(root: Path, tokenizer: str, year: int):
+def tokenize_arxiv(root: Path, year: int):
+    tokenizer = tiktoken.get_encoding("gpt2")
     tokens = []
     tokens_val = []
     tokens_test = []
@@ -61,14 +63,14 @@ def tokenize_arxiv(root: Path, tokenizer: str, year: int):
         with open(mdpath, encoding="utf8") as f:
             text = "".join(f.readlines())
         if i % 10 <= 6:  # train split
-            tokens += encode(text, tokenizer)
+            tokens += tokenizer.encode(text)
         elif i % 10 <= 8:  # val split
-            tokens_val += encode(text, tokenizer)
+            tokens_val += tokenizer.encode(text)
         else:  # test split
-            tokens_test += encode(text, tokenizer)
+            tokens_test += tokenizer.encode(text)
 
     # save to dir
-    tpath = root/tokenizer/str(year)
+    tpath = root/str(year)
     tpath.mkdir(parents=True)
     for x, name in zip([tokens, tokens_val, tokens_test],
                        ["train", "val", "test"]):
@@ -78,7 +80,7 @@ def tokenize_arxiv(root: Path, tokenizer: str, year: int):
             mem[i] = v
 
 
-def load_arxiv(cachedir: Path, tokenizer: str, years: Optional[list[int]] = None):
+def load_arxiv(cachedir: Path, years: Optional[List[int]] = None):
     all_years = list(range(1992, 2004))
     if years is None:
         years = all_years
@@ -93,21 +95,21 @@ def load_arxiv(cachedir: Path, tokenizer: str, years: Optional[list[int]] = None
 
     # tokenize all years not previously tokenized
     for year in years:
-        if not (root/tokenizer/str(year)).exists():
-            tokenize_arxiv(root, tokenizer, year)
+        if not (root/str(year)).exists():
+            tokenize_arxiv(root, year)
 
     # load meta
     ret = {}
     for split in ["train", "val"]:
-        paths = [root/tokenizer/str(year)/f"{split}.npy" for year in years]
+        paths = [root/str(year)/f"{split}.npy" for year in years]
         x = [np.memmap(path, dtype=np.uint16, mode="r") for path in paths]
         ret[split] = np.concatenate(x)
     return ret
 
 
-def get_arxiv_2000(tokenizer: str):
-    return load_arxiv(Path(os.path.dirname(__file__))/"datasets", tokenizer, [2000])
+def get_arxiv_2000():
+    return load_arxiv(Path(os.path.dirname(__file__))/"datasets", [2000])
 
 
-def get_arxiv_full(tokenizer: str):
-    return load_arxiv(Path(os.path.dirname(__file__))/"datasets", tokenizer)
+def get_arxiv_full():
+    return load_arxiv(Path(os.path.dirname(__file__))/"datasets")

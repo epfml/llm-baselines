@@ -38,14 +38,6 @@ def get_exp_name(args):
 
 
 def main(args): 
-    # preprocess args
-    if args.vocab_size == 0:  # interpret as "auto", i.e. infer from tokenizer
-        if args.tokenizer == "bpe":
-            args.vocab_size = 50304
-        elif args.tokenizer == "character":
-            args.vocab_size = 96
-        else:
-            raise ValueError(f"Tokenizer {args.tokenizer} expects vocab_size > 0")
 
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
