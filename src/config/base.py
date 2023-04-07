@@ -1,6 +1,7 @@
-import argparse
 import torch
+
 import distributed
+
 
 def parse_args(base_parser, args, namespace):
     parser = base_parser
@@ -20,7 +21,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--eval_freq', default=200, type=int) # in iterations
     parser.add_argument('--results_base_folder', default="./exps", type=str) 
     # Dataset params
-    parser.add_argument('--dataset', default='wikitext', choices=['wikitext', 'arxiv'])
+    parser.add_argument('--dataset', default='wikitext', choices=['wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki"])
     parser.add_argument('--vocab_size', default=50304, type=int)
     # Model params
     parser.add_argument('--model', default='base', choices=['base', 'sparse-heads-q', 'sparse-heads-qk', 'sparse-tokens-q', 'sparse-tokens-qk'])

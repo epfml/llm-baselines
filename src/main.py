@@ -39,7 +39,6 @@ def get_exp_name(args):
 
 def main(args): 
 
-
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
 
@@ -47,9 +46,10 @@ def main(args):
     args = distributed_backend.get_adjusted_args_for_process(args)
 
     args.device = torch.device(args.device)
-    torch.cuda.set_device(args.device)
-    device_type = 'cuda' if 'cuda' in str(args.device) else 'cpu'
-    
+    device_type = "cuda" if "cuda" in str(args.device) else "cpu"
+    if device_type == "cuda":
+        torch.cuda.set_device(args.device)
+
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -102,14 +102,13 @@ def main(args):
         del params_copy['device']
         wandb.init(project=args.wandb_project, name=exp_name, config=params_copy)
     
-    ckpt_path = f"{args.results_base_folder}/{args.dataset}/{args.model}/{exp_name}"
+    ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
     if not os.path.exists(ckpt_path):
         if distributed_backend.is_master_process():
             os.makedirs(ckpt_path)
-    else:
-        if os.path.isfile(f"{ckpt_path}/summary.json"): # the experiment was already completed
-            print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
-            sys.exit(0)
+    elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
+        print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
+        sys.exit(0)
 
     if args.model == 'base': # all train functions have the same interface
         train = train_base
