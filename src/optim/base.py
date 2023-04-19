@@ -33,7 +33,7 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
                     outputs = model(x, targets=y)
 
-            loss = outputs['loss']
+            loss = outputs['loss'] / acc_steps
             loss.backward()
             substep += 1
 
