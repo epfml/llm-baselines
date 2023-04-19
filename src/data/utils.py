@@ -4,6 +4,7 @@ from typing import Dict
 from .shakespeare import get_shakespeare_data
 from .wikitext import get_wikitext_data
 from .arxiv import get_arxiv_2000, get_arxiv_full
+from .openwebtext2 import get_openwebtext2_data
 
 
 def get_dataset(args) -> Dict[str, np.ndarray]:
@@ -24,5 +25,7 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         train_data = np.concatenate((arxiv_data['train'], wiki_data['train']))
         val_data = np.concatenate((arxiv_data['val'], wiki_data['val']))
         return {'train': train_data, 'val': val_data}
+    if args.dataset == 'openwebtext2':
+        return get_openwebtext2_data()
     else:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")

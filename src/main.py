@@ -57,6 +57,8 @@ def main(args):
     print(f"Loading dataset '{args.dataset}'")
     
     data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
+    if args.data_in_ram:
+        data = {'train': np.array(data['train']), 'val': np.array(data['val'])}
         
     print(f"Num training tokens: {len(data['train'])}")
     print(f"Num validation tokens: {len(data['val'])}")

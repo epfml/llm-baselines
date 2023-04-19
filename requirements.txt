@@ -3,6 +3,8 @@ tiktoken
 torch==2.0.0+cu118
 torchaudio==2.0.0+cu118
 torchvision==0.15.0+cu118
-tqdm
+tqdm==4.65.0
 transformers
 wandb
+datasets
+zstandard
