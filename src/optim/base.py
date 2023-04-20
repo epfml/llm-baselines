@@ -37,6 +37,8 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
             loss.backward()
             substep += 1
 
+        if extra_args.grad_clip != 0.0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
         opt.step()
         scheduler.step()
         opt.zero_grad(set_to_none=True)
