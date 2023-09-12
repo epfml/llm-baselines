@@ -51,7 +51,7 @@ def train_base(model, opt, data, scheduler, iterations, acc_steps, batch_size, s
                 epoch = substep//num_substeps_per_epoch
 
                 model.eval()
-                train_loss = loss.detach().cpu().item()
+                train_loss = loss.detach().cpu().item() * acc_steps
                 current_lr = scheduler.get_last_lr()[0] if scheduler is not None else extra_args.lr
                 val_acc, val_loss, val_perplexity = eval(model, data['val'], sequence_length, batch_size,
                                                          extra_args.device, max_num_batches=24, ctx=type_ctx)
