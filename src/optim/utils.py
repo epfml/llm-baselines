@@ -115,7 +115,7 @@ def save_checkpoint(distributed_backend, model, opt, scheduler, itr, ckpt_path, 
     checkpoint = dict({
         'model': distributed_backend.get_raw_model(model).state_dict(),
         'optimizer': opt.state_dict(),
-        'scheduler': scheduler.state_dict(),
+        'scheduler': scheduler.state_dict() if scheduler != None else None,
         'itr': itr,
     }, **extra_args)
 
