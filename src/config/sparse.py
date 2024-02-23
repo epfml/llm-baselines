@@ -8,6 +8,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--batch_size', default=50, type=int)
     parser.add_argument('--acc_steps', default=4, type=int)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--data_seed', default=1337, type=int)
     parser.add_argument('--device', default='cuda:0', type=str)
     parser.add_argument('--iterations', default=15000, type=int)
     parser.add_argument('--lr', default=2e-3, type=float)

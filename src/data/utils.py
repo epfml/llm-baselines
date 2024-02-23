@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Dict
+import torch
 
 from .shakespeare import get_shakespeare_data
 from .wikitext import get_wikitext_data
@@ -29,3 +30,51 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         return get_openwebtext2_data()
     else:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")
+
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, data, sequence_length):
+        super().__init__()
+        self.data = data
+        self.sequence_length = sequence_length
+
+    def __len__(self):
+        return len(self.data) - self.sequence_length
+
+    def __getitem__(self, idx):
+        seq_length = self.sequence_length
+        x = torch.from_numpy((self.data[idx : idx + seq_length]).astype(np.int64))
+
+        y = torch.from_numpy(
+            (self.data[idx + 1 : idx + 1 + seq_length]).astype(np.int64)
+        )
+        return x, y
+
+
+def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backend=None):
+    """Create a DataLoader for the given data. If distributed_backend is provided and is truly
+    distributed (world size > 1), the DataLoader will be created with a DistributedSampler that
+    splits the data across the processes (in conjunction with DDP).
+    Otherwise, we use a RandomSampler with single shuffling (not every epoch).
+    """
+    dataset = Dataset(data, sequence_length=sequence_length)
+    if distributed_backend and distributed_backend.get_world_size() > 1:
+        sampler = torch.utils.data.DistributedSampler(
+            dataset,
+            shuffle=True,  # note: right now, we don't use `sampler.set_epoch`
+            # in each epoch, which means that the data is not shuffled
+            # across epochs. same ordering is used, which is fine.
+            seed=seed,
+        )
+    else:
+        g = torch.Generator()
+        g.manual_seed(seed)
+        sampler = torch.utils.data.RandomSampler(
+            dataset, replacement=False, generator=g
+        )
+
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        sampler=sampler,
+        batch_size=batch_size,
+    )
+    return loader

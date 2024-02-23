@@ -34,6 +34,7 @@ def get_exp_name(args):
     if 'sparse' in args.model:
         exp_name += f"_lmd{args.lmbda}"
     exp_name += f"_seed={args.seed}"
+    exp_name += f"_data_seed={args.data_seed}"
     return exp_name
 
 
@@ -121,7 +122,7 @@ def main(args):
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
 
-    stats = train(model, opt, data, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
+    stats = train(model, opt, data, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
                   ckpt_path=f"{ckpt_path}/ckpt.pt", extra_args=args)
