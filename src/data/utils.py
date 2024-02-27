@@ -38,10 +38,14 @@ class Dataset(torch.utils.data.Dataset):
         self.sequence_length = sequence_length
 
     def __len__(self):
-        return len(self.data) - self.sequence_length
+        total_length = len(self.data)
+        # chunk the data into sequences of length `sequence_length`
+        # NOTE: we discard the last remainding sequence if it's not of length `sequence_length`
+        return total_length // self.sequence_length
 
     def __getitem__(self, idx):
         seq_length = self.sequence_length
+        idx = idx * seq_length
         x = torch.from_numpy((self.data[idx : idx + seq_length]).astype(np.int64))
 
         y = torch.from_numpy(
