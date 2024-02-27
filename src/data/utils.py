@@ -58,15 +58,15 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
     """Create a DataLoader for the given data. If distributed_backend is provided and is truly
     distributed (world size > 1), the DataLoader will be created with a DistributedSampler that
     splits the data across the processes (in conjunction with DDP).
-    Otherwise, we use a RandomSampler with single shuffling (not every epoch).
+    Otherwise, use a RandomSampler with the specified seed.
+
+    Returns both the dataloader and the sampler.
     """
     dataset = Dataset(data, sequence_length=sequence_length)
     if distributed_backend and distributed_backend.get_world_size() > 1:
         sampler = torch.utils.data.DistributedSampler(
             dataset,
-            shuffle=True,  # note: right now, we don't use `sampler.set_epoch`
-            # in each epoch, which means that the data is not shuffled
-            # across epochs. same ordering is used, which is fine.
+            shuffle=True,
             seed=seed,
         )
     else:
@@ -81,4 +81,4 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
         sampler=sampler,
         batch_size=batch_size,
     )
-    return loader
+    return loader, sampler
