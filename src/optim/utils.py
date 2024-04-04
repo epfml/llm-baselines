@@ -4,25 +4,26 @@ import torch.nn.functional as F
 from contextlib import nullcontext, contextmanager, ExitStack
 
 
-def get_batch(data, seq_length, batch_size, device='cpu'):
-    ix = torch.randint(len(data) - seq_length, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+seq_length]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+seq_length]).astype(np.int64)) for i in ix])
+def get_batch(dataloader, device="cpu"):
+    x, y = next(dataloader)
     if "cuda" in torch.device(device).type:
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x = x.pin_memory().to(device, non_blocking=True)
         y = y.pin_memory().to(device, non_blocking=True)
+    else:
+        x = x.to(device)
+        y = y.to(device)
     return x, y
 
 
 @torch.no_grad()
-def eval(model, data_tensor, sequence_length, batch_size, device='cpu', max_num_batches=24, ctx=nullcontext()):
+def eval(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullcontext()):
     assert model.training == False
 
     loss_list_val, acc_list = [], []
 
     for _ in range(max_num_batches): 
-        x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
+        x, y = get_batch(data_val_iter, device=device)
         with ctx:
             outputs = model(x, targets=y, get_logits=True)
         val_loss = outputs['loss']
@@ -37,13 +38,13 @@ def eval(model, data_tensor, sequence_length, batch_size, device='cpu', max_num_
 
 
 @torch.no_grad()
-def eval_sparse(model, data_tensor, sequence_length, batch_size, device='cpu', max_num_batches=24, ctx=nullcontext(), alpha_th=None, drop_k=None):
+def eval_sparse(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullcontext(), alpha_th=None, drop_k=None):
     assert model.training == False
 
     ce_loss_list_val, l1_loss_list_val, acc_list, sparcity_per_layer = [], [], [], []
 
     for _ in range(max_num_batches): 
-        x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
+        x, y = get_batch(data_val_iter, device=device)
         with ctx:
             outputs = model(x, targets=y, alpha_th=alpha_th, drop_k=drop_k, get_logits=True, get_alphas=True)
         ce_loss_list_val.append(outputs['ce_loss'])
