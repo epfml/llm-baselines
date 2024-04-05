@@ -45,12 +45,11 @@ class MoDBlock(nn.Module):
         top_k_tokens_processed = self.block(top_k_tokens)
 
         """STEP 3: combine results"""
-        # Create a full batch index array,
-        # then update the original array
-        batch_indices = torch.arange(B).view(B, 1).expand(-1, top_k)
-        result = x.clone()
-        result[batch_indices, selected_tokens.squeeze(-1), :] += (
-            weights * top_k_tokens_processed
+        x = torch.scatter_add(
+            x,
+            dim=1,
+            index=indices_expanded,
+            src=top_k_tokens_processed * weights,
         )
 
-        return result
+        return x
