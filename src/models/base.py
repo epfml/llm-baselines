@@ -15,6 +15,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from models.mod import MoDBlock
+
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -118,12 +120,26 @@ class GPTBase(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding("gpt2")
+        
+        if config.mixture_of_depth:
+            h = nn.ModuleList(
+                [
+                    (
+                        MoDBlock(config, Block)
+                        if i % config.mod_every == 0
+                        else Block(config)
+                    )
+                    for i in range(config.n_layer)
+                ]
+            )
+        else:
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)])
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.sequence_length, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = h,
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
 

@@ -45,4 +45,9 @@ def parse_args(base_parser, args, namespace):
     # Distributed args
     parser.add_argument('--distributed_backend', default=None, type=str, required=False,
                         choices=distributed.registered_backends())  # distributed backend type
+    
+    # Args for mixture of depths
+    parser.add_argument("--mixture_of_depth", action="store_true")
+    parser.add_argument("--mod_capacity_factor", default=0.125, type=float)
+    parser.add_argument("--mod_every", default=2, type=int)
     return parser.parse_args(args, namespace)
