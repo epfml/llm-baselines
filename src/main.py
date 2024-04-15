@@ -114,6 +114,7 @@ def main(args):
         sys.exit(0)
     itr = 0
     rng_state_dict = None
+    distributed_backend.sync()
     checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
     if checkpoints:
         last_ckpt_path = sorted(checkpoints)[-1]
