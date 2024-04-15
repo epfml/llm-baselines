@@ -7,15 +7,17 @@ import wandb
 import time 
 import itertools
 import copy
-
+import random
+import os
+import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
 
-def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend, extra_args):
+def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
-    itr, substep, best_val_loss, text_table = 0, 0, float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
+    substep, best_val_loss, text_table = 0, float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
 
     data["train"], train_sampler = get_dataloader(
         data["train"],
@@ -50,6 +52,12 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     t0 = time.time()
     train_epochs = 0
     while itr < iterations:
+        if not rng_state_dict is None:
+            torch.set_rng_state(rng_state_dict["cpu_rng_state"])
+            torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
+            np.random.set_state(rng_state_dict["numpy_rng_state"])
+            random.setstate(rng_state_dict["py_rng_state"])
+            
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x, y = get_batch(data_train_iter, device=extra_args.device)
             with type_ctx:
@@ -122,7 +130,20 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
                 model.train()
                 t0 = time.time()
-
+        if distributed_backend.is_master_process():
+            if extra_args.save_checkpoint_freq is not None and itr % extra_args.save_checkpoint_freq == 0:
+                print(f"saving checkpoint to {ckpt_path}/ckpt_{itr}.pt")
+                save_checkpoint(distributed_backend=distributed_backend,
+                                model=model,
+                                opt=opt,
+                                scheduler=scheduler,
+                                itr=itr,
+                                cpu_rng_state=torch.get_rng_state(),
+                                gpu_rng_state=torch.cuda.get_rng_state(),
+                                numpy_rng_state=np.random.get_state(),
+                                py_rng_state=random.getstate(),
+                                ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
+                
     if distributed_backend.is_master_process():
         print(f"saving checkpoint to {ckpt_path}")
         save_checkpoint(distributed_backend=distributed_backend,

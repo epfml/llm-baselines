@@ -112,6 +112,26 @@ def main(args):
     elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
         print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
         sys.exit(0)
+    itr = 0
+    rng_state_dict = None
+    checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
+    if checkpoints:
+        last_ckpt_path = sorted(checkpoints)[-1]
+        print(f"Training interrupted, resuming from {last_ckpt_path}")
+        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+        model_state_dict = {k.replace("_orig_mod.", ""):v for k,v in checkpoint['model'].items()}
+        # FIXME checkpoints from compiled model have _orig_mod keyword
+
+        optimizer_state_dict = checkpoint['optimizer']
+        scheduler_state_dict = checkpoint['scheduler']
+        rng_state_dict = {
+            module: checkpoint[module] for module in ["cpu_rng_state", "gpu_rng_state", "numpy_rng_state", "py_rng_state"]
+        }
+
+        model.load_state_dict(model_state_dict) 
+        opt.load_state_dict(optimizer_state_dict)
+        scheduler.load_state_dict(scheduler_state_dict)
+        itr=checkpoint['itr']
 
     if args.model == 'base': # all train functions have the same interface
         train = train_base
@@ -125,7 +145,7 @@ def main(args):
     stats = train(model, opt, data, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
-                  ckpt_path=f"{ckpt_path}/ckpt.pt", extra_args=args)
+                  ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, extra_args=args)
     
     args.device = None
     args.dtype = None

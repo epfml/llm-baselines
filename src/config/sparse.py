@@ -47,4 +47,6 @@ def parse_args(base_parser, args, namespace):
     # Distributed args
     parser.add_argument('--distributed_backend', default=None, type=str, required=False,
                         choices=distributed.registered_backends())  # distributed backend type
+    parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
+
     return parser.parse_args(args, namespace)
