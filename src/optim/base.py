@@ -51,12 +51,12 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
     t0 = time.time()
     train_epochs = 0
-    while itr < iterations:
-        if not rng_state_dict is None:
+    if not rng_state_dict is None:
             torch.set_rng_state(rng_state_dict["cpu_rng_state"])
             torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
             np.random.set_state(rng_state_dict["numpy_rng_state"])
             random.setstate(rng_state_dict["py_rng_state"])
+    while itr < iterations:
             
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x, y = get_batch(data_train_iter, device=extra_args.device)

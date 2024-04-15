@@ -123,15 +123,16 @@ def main(args):
         # FIXME checkpoints from compiled model have _orig_mod keyword
 
         optimizer_state_dict = checkpoint['optimizer']
-        scheduler_state_dict = checkpoint['scheduler']
         rng_state_dict = {
             module: checkpoint[module] for module in ["cpu_rng_state", "gpu_rng_state", "numpy_rng_state", "py_rng_state"]
         }
 
         model.load_state_dict(model_state_dict) 
         opt.load_state_dict(optimizer_state_dict)
-        scheduler.load_state_dict(scheduler_state_dict)
         itr=checkpoint['itr']
+        if not scheduler is None:
+            scheduler_state_dict = checkpoint['scheduler']
+            scheduler.load_state_dict(scheduler_state_dict)
 
     if args.model == 'base': # all train functions have the same interface
         train = train_base
