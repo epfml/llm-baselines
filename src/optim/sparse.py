@@ -62,7 +62,8 @@ def train_sparse(model, opt, data, data_seed, scheduler, iterations, acc_steps, 
             substep += 1
 
         opt.step()
-        scheduler.step()
+        if scheduler != None:
+            scheduler.step()
         opt.zero_grad(set_to_none=True)
         itr += 1
 
