@@ -109,12 +109,12 @@ def main(args):
     if not os.path.exists(ckpt_path):
         if distributed_backend.is_master_process():
             os.makedirs(ckpt_path)
+        distributed_backend.sync()
     elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
         print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
         sys.exit(0)
     itr = 0
     rng_state_dict = None
-    distributed_backend.sync()
     checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
     if checkpoints:
         last_ckpt_path = sorted(checkpoints)[-1]
@@ -131,7 +131,7 @@ def main(args):
         model.load_state_dict(model_state_dict) 
         opt.load_state_dict(optimizer_state_dict)
         itr=checkpoint['itr']
-        if not scheduler is None:
+        if scheduler is not None:
             scheduler_state_dict = checkpoint['scheduler']
             scheduler.load_state_dict(scheduler_state_dict)
 
