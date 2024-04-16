@@ -5,15 +5,16 @@ import torch.nn.functional as F
 import wandb
 import time 
 import copy
-
+import numpy as np
+import random
 from .utils import eval_sparse, get_batch, eval_sweep_dropk, save_checkpoint
 
 
-def train_sparse(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend, extra_args):
+def train_sparse(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend, extra_args, itr=0, rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
-    itr, substep, best_val_loss, text_table, sparsity_plot = 0, 0, float('inf'), None, None # best_val_loss not used atm, early stopping not recommended but possible 
+    substep, best_val_loss, text_table, sparsity_plot = 0, float('inf'), None, None # best_val_loss not used atm, early stopping not recommended but possible 
     data["train"] = get_dataloader(
         data["train"],
         sequence_length=sequence_length,
@@ -42,7 +43,14 @@ def train_sparse(model, opt, data, data_seed, scheduler, iterations, acc_steps, 
     model.train()
 
     t0 = time.time()
+    if not rng_state_dict is None:
+            torch.set_rng_state(rng_state_dict["cpu_rng_state"])
+            torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
+            np.random.set_state(rng_state_dict["numpy_rng_state"])
+            random.setstate(rng_state_dict["py_rng_state"])
+
     while itr < iterations:
+
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x, y = get_batch(data_train_iter, device=extra_args.device)
             with type_ctx:
@@ -129,6 +137,20 @@ def train_sparse(model, opt, data, data_seed, scheduler, iterations, acc_steps, 
 
                 model.train()
                 t0 = time.time()
+        if distributed_backend.is_master_process():
+            if extra_args.save_checkpoint_freq is not None and itr % extra_args.save_checkpoint_freq == 0:
+                print(f"saving checkpoint to {ckpt_path}/ckpt_{itr}.pt")
+                save_checkpoint(distributed_backend=distributed_backend,
+                                model=model,
+                                opt=opt,
+                                scheduler=scheduler,
+                                itr=itr,
+                                cpu_rng_state=torch.get_rng_state(),
+                                gpu_rng_state=torch.cuda.get_rng_state(),
+                                numpy_rng_state=np.random.get_state(),
+                                py_rng_state=random.getstate(),
+                                ckpt_path=f"{ckpt_path}/ckpt_{itr}.pt")
+                
 
     if distributed_backend.is_master_process():
         print(f"saving checkpoint to {ckpt_path}")
