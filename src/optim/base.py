@@ -51,7 +51,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
    
     
-    if not extra_args.compile:
+    if extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
 
