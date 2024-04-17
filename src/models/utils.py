@@ -1,5 +1,14 @@
-from .base import GPTBase
-from .llama import Llama
+import torch
+from .llama import Llama, RMSNorm
+from .base import GPTBase, LayerNorm
+
+
+BLACKLIST_WEIGHT_MODULES = (
+    torch.nn.LayerNorm,
+    LayerNorm,
+    RMSNorm,
+    torch.nn.Embedding,
+)
 
 
 def get_model(args):

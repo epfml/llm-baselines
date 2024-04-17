@@ -37,6 +37,12 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
     parser.add_argument('--bias', default=False, type=bool)
     parser.add_argument('--compile', action='store_true') # if true then model is compiled 
+    parser.add_argument("--rmsnorm_eps", default=1e-5, type=float)
+    parser.add_argument(
+        "--multiple_of",  # make SwiGLU hidden layer size multiple of large power of 2
+        default=256,
+        type=int,
+    )
     # logging params (WandB)
     parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
     parser.add_argument('--wandb_project', default="my-project", type=str)
