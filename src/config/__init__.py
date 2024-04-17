@@ -1,9 +1,7 @@
 from . import base
-from . import sparse
 
 CONFIG_FORMAT_TO_MODULE_MAP = {
     "base": base,
-    "sparse": sparse,
 }
 
 

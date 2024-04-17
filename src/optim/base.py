@@ -43,7 +43,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
     num_substeps_per_epoch = len(data["train"])
     
-    if not extra_args.no_compile:
+    if not extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
 

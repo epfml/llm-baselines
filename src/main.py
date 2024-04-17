@@ -13,7 +13,6 @@ import config
 from models.utils import get_model
 from data.utils import get_dataset
 from optim.base import train_base
-from optim.sparse import train_sparse
 import distributed
 
 
@@ -31,8 +30,6 @@ def get_exp_name(args):
     exp_name = f"{args.model}_lr{args.lr}_bs{args.batch_size}x{args.acc_steps}_{args.world_size}nodes"
     if args.wandb_run_prefix != 'none':
         exp_name = args.wandb_run_prefix + '_' + exp_name
-    if 'sparse' in args.model:
-        exp_name += f"_lmd{args.lmbda}"
     exp_name += f"_seed={args.seed}"
     exp_name += f"_data_seed={args.data_seed}"
     return exp_name
@@ -135,10 +132,8 @@ def main(args):
             scheduler_state_dict = checkpoint['scheduler']
             scheduler.load_state_dict(scheduler_state_dict)
 
-    if args.model == 'base': # all train functions have the same interface
+    if args.model in ['base', 'llama2']: # all train functions have the same interface
         train = train_base
-    elif 'sparse' in args.model:
-        train = train_sparse
     else:
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
