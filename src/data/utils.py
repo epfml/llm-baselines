@@ -44,7 +44,7 @@ class Dataset(torch.utils.data.Dataset):
         total_length = len(self.data)
         # chunk the data into sequences of length `sequence_length`
         # NOTE: we discard the last remainding sequence if it's not of length `sequence_length`
-        return total_length // self.sequence_length
+        return (total_length - 1) // self.sequence_length
 
     def __getitem__(self, idx):
         seq_length = self.sequence_length
@@ -67,6 +67,7 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
     """
     dataset = Dataset(data, sequence_length=sequence_length)
     if distributed_backend and distributed_backend.get_world_size() > 1:
+        print("HII")
         sampler = torch.utils.data.DistributedSampler(
             dataset,
             shuffle=True,

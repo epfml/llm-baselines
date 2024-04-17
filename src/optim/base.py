@@ -34,13 +34,15 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         seed=data_seed,
     )
 
+    num_substeps_per_epoch = len(data["train"])
+    train_epochs = substep//num_substeps_per_epoch
+    
     if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
         train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
-
-    num_substeps_per_epoch = len(data["train"])
-
-    if distributed_backend.get_world_size() > 1:
-        train_sampler.set_epoch(substep//num_substeps_per_epoch)
+    if hasattr(train_sampler, "set_epoch"):
+        train_sampler.set_epoch(train_epochs)
+    else:
+        sampler_state_before_iter = train_sampler.generator.get_state()
     data_train_iter = iter(data["train"])
 
     
@@ -58,7 +60,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     model.train()
 
     t0 = time.time()
-    train_epochs = 0
+    
     if rng_state_dict is not  None:
         torch.set_rng_state(rng_state_dict["cpu_rng_state"])
         torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
@@ -72,6 +74,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
             
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x, y = get_batch(data_train_iter, device=extra_args.device)
+            
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
                     outputs = model(x, targets=y)
@@ -82,9 +85,12 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
             if substep % len(data["train"]) == 0:
                 train_epochs += 1
                 print(f"Train epoch {train_epochs} done (full pass over training data)")
-                if distributed_backend.get_world_size() > 1:
+                if hasattr(train_sampler, "set_epoch"):
                     # set epoch for reshuffling between epochs
                     train_sampler.set_epoch(train_epochs)
+                    sampler_state_before_iter = None
+                else:
+                    sampler_state_before_iter = train_sampler.generator.get_state()
                 data_train_iter = iter(data["train"])
 
 
@@ -154,7 +160,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                                 gpu_rng_state=torch.cuda.get_rng_state(),
                                 numpy_rng_state=np.random.get_state(),
                                 py_rng_state=random.getstate(),
-                                train_sampler_state=train_sampler.generator.get_state() if distributed_backend.get_world_size() == 1 else None,
+                                train_sampler_state=sampler_state_before_iter,
                                 ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
                 
     if distributed_backend.is_master_process():
