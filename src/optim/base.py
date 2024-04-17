@@ -17,8 +17,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
-    substep, best_val_loss, text_table = 0, float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
-
+    best_val_loss, text_table = float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
+    substep = itr * acc_steps
     data["train"], train_sampler = get_dataloader(
         data["train"],
         sequence_length=sequence_length,
@@ -26,8 +26,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         seed=data_seed,
         distributed_backend=distributed_backend,
     )
-    if distributed_backend.get_world_size() > 1:
-        train_sampler.set_epoch(0)
+    
     data["val"], val_sampler = get_dataloader(
         data["val"],
         sequence_length=sequence_length,
@@ -35,13 +34,22 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         seed=data_seed,
     )
 
+    if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
+        train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
+
+    num_substeps_per_epoch = len(data["train"])
+
+    if distributed_backend.get_world_size() > 1:
+        train_sampler.set_epoch(substep//num_substeps_per_epoch)
     data_train_iter = iter(data["train"])
+
+    
     # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
     data_val_iter = itertools.cycle(data["val"])
 
     stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
 
-    num_substeps_per_epoch = len(data["train"])
+   
     
     if not extra_args.compile:
         print(f"Compiling model ...")
@@ -51,11 +59,15 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
     t0 = time.time()
     train_epochs = 0
-    if not rng_state_dict is None:
-            torch.set_rng_state(rng_state_dict["cpu_rng_state"])
-            torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
-            np.random.set_state(rng_state_dict["numpy_rng_state"])
-            random.setstate(rng_state_dict["py_rng_state"])
+    if rng_state_dict is not  None:
+        torch.set_rng_state(rng_state_dict["cpu_rng_state"])
+        torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
+        np.random.set_state(rng_state_dict["numpy_rng_state"])
+        random.setstate(rng_state_dict["py_rng_state"])
+    for _ in range(substep % num_substeps_per_epoch):
+        get_batch(data_train_iter, device=extra_args.device)
+
+    
     while itr < iterations:
             
         for microstep_idx in range(acc_steps):  # gradient accumulation
@@ -132,7 +144,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 t0 = time.time()
         if distributed_backend.is_master_process():
             if extra_args.save_checkpoint_freq is not None and itr % extra_args.save_checkpoint_freq == 0:
-                print(f"saving checkpoint to {ckpt_path}/ckpt_{itr}.pt")
+                print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")
                 save_checkpoint(distributed_backend=distributed_backend,
                                 model=model,
                                 opt=opt,
@@ -142,6 +154,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                                 gpu_rng_state=torch.cuda.get_rng_state(),
                                 numpy_rng_state=np.random.get_state(),
                                 py_rng_state=random.getstate(),
+                                train_sampler_state=train_sampler.generator.get_state() if distributed_backend.get_world_size() == 1 else None,
                                 ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
                 
     if distributed_backend.is_master_process():
@@ -154,4 +167,3 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         ckpt_path=ckpt_path)
 
     return stats
-
