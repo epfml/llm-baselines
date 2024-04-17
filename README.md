@@ -1,6 +1,6 @@
 # LLM-baselines
 
-A modular codebase to experiment with transformers, inspired from NanoGPT. 
+A modular codebase to experiment with transformers, inspired by NanoGPT. 
 
 ## Quickstart 
 
@@ -94,6 +94,7 @@ src/
         wikitext.py # load/process wikitext
         arxiv.py    # load/process arxiv
         shakespeare.py # load/process the Shakespeare dataset
+        slimpajama.py
         ...
     models/
         utils.py    # contains the get_model function
@@ -116,3 +117,4 @@ Given a multi-GPU machine with e.g. 4 GPUs, one can distribute the training usin
 torchrun --nproc_per_node=4 ./src/main.py --config_format base --distributed_backend nccl --dataset slimpajama --model base
 ```
 
+When using multiple GPUs, the data will be distributed among the GPUs by dividing the number of accumulation steps by the number of nodes. For instance if we train with a batch size of 32 and 4 accumulation steps, then each GPU will process batches of 32 elements and do 1 accumulation steps. For this reason we require `acc_steps` to be a multiple of the number of GPUs.    
