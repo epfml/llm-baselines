@@ -83,5 +83,6 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
         dataset,
         sampler=sampler,
         batch_size=batch_size,
+        num_workers=4,
     )
     return loader, sampler
