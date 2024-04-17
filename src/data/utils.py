@@ -67,7 +67,6 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
     """
     dataset = Dataset(data, sequence_length=sequence_length)
     if distributed_backend and distributed_backend.get_world_size() > 1:
-        print("HII")
         sampler = torch.utils.data.DistributedSampler(
             dataset,
             shuffle=True,
