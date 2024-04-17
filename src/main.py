@@ -25,16 +25,6 @@ def get_args():
     return config.parse_args_with_format(format=args.config_format, base_parser=parser, args=rem_args, namespace=args)
 
 
-def get_exp_name(args):
-    """ Returns the name of the experiment, used for saving models and wandb. """
-    exp_name = f"{args.model}_lr{args.lr}_bs{args.batch_size}x{args.acc_steps}_{args.world_size}nodes"
-    if args.wandb_run_prefix != 'none':
-        exp_name = args.wandb_run_prefix + '_' + exp_name
-    exp_name += f"_seed={args.seed}"
-    exp_name += f"_data_seed={args.data_seed}"
-    return exp_name
-
-
 def main(args): 
 
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
@@ -96,7 +86,7 @@ def main(args):
         scheduler = None
 
     args.world_size = distributed_backend.get_world_size()
-    exp_name = get_exp_name(args)
+    exp_name = args.exp_name
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
@@ -110,24 +100,37 @@ def main(args):
     elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
         print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
         sys.exit(0)
+
     itr = 0
     rng_state_dict = None
-    checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
-    if checkpoints:
-        last_ckpt_path = sorted(checkpoints)[-1]
-        print(f"Training interrupted, resuming from {last_ckpt_path}")
+    if args.use_pretrained == "auto":
+        checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
+        if checkpoints:
+            args.use_pretrained = sorted(checkpoints)[-1]
+        else:
+            args.use_pretrained = None
+    
+    if args.use_pretrained is not None:
+        last_ckpt_path = args.use_pretrained
+        print(f"Resuming from {last_ckpt_path}")
         checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
-        model_state_dict = {k.replace("_orig_mod.", ""):v for k,v in checkpoint['model'].items()}
+        model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
         # FIXME checkpoints from compiled model have _orig_mod keyword
 
         optimizer_state_dict = checkpoint['optimizer']
         rng_state_dict = {
-            module: checkpoint[module] for module in ["cpu_rng_state", "gpu_rng_state", "numpy_rng_state", "py_rng_state"]
+            module: checkpoint[module] for module in [
+                "cpu_rng_state", 
+                "gpu_rng_state", 
+                "numpy_rng_state", 
+                "py_rng_state",
+                "train_sampler_state"
+            ]
         }
 
         model.load_state_dict(model_state_dict) 
         opt.load_state_dict(optimizer_state_dict)
-        itr=checkpoint['itr']
+        itr = checkpoint['itr']
         if scheduler is not None:
             scheduler_state_dict = checkpoint['scheduler']
             scheduler.load_state_dict(scheduler_state_dict)
