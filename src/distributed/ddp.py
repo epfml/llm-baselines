@@ -20,6 +20,10 @@ class DataParallelDistributedBackend(DistributedBackend):
     def get_adjusted_args_for_process(self, args):
         effective_batch_size = args.batch_size * args.acc_steps
         world_size = self.get_world_size()
+        if args.acc_steps % world_size != 0:
+            raise ValueError(f"Number of accumulation steps "
+                             "{args.acc_steps} is not divisible "
+                             "by the world size {world_size}.")
         if effective_batch_size % world_size != 0:
             raise ValueError(f"Effective batch size "
                              "{effective_batch_size} is not divisible "
