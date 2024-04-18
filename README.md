@@ -118,3 +118,11 @@ torchrun --nproc_per_node=4 ./src/main.py --config_format base --distributed_bac
 ```
 
 When using multiple GPUs, the data will be distributed among the GPUs by dividing the number of accumulation steps by the number of nodes. For instance if we train with a batch size of 32 and 4 accumulation steps, then each GPU will process batches of 32 elements and do 1 accumulation steps. For this reason we require `acc_steps` to be a multiple of the number of GPUs.    
+
+
+## Experimenting locally on your device with CPU
+If do not have access to a GPU or just want to try the code locally on your device, you can try the Shakespeare dataset with character-level tokens:
+
+```sh
+python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare-char --device=cpu --vocab_size=96
+```
