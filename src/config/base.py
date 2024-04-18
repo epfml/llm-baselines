@@ -15,7 +15,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--data_seed', default=1337, type=int)
     parser.add_argument('--device', default='cuda:0', type=str)
-    parser.add_argument('--iterations', default=40000, type=int)
+    parser.add_argument('--iterations', default=25000, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--warmup_percent', default=0.05, type=float)
     parser.add_argument('--weight_decay', default=0.1, type=float)
@@ -35,7 +35,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--use_pretrained', default="auto", type=none_or_str) # 'none', 'gpt-2' or a path to the pretraind model
     parser.add_argument('--dropout', default=0.0, type=float)
     parser.add_argument('--n_head', default=12, type=int)
-    parser.add_argument('--n_layer', default=24, type=int) # depths in att + ff blocks
+    parser.add_argument('--n_layer', default=12, type=int) # depths in att + ff blocks
     parser.add_argument('--n_embd', default=768, type=int) # embedding size / hidden size ... 
     parser.add_argument('--sequence_length', default=512, type=int)
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)

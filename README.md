@@ -10,13 +10,19 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run a simple training on the Slimpajama dataset:
+Run a simple training on the Slimpajama dataset ([6B subset](https://huggingface.co/datasets/DKYoon/SlimPajama-6B), 24GBs decompressed, takes a few minutes to download):
 
 ```sh
 python ./src/main.py --config_format base
 ```
 
-The above command trains a 208.93M parameters model. It trains for 40k iterations with a batch size of 128=32x4 (4 gradient accumulation steps). 
+The above command trains a 123.59M parameters model. It trains for 25k iterations with a batch size of 128=32x4 (4 gradient accumulation steps), using a cosine schedule with a maximum learning rate of 1e-3 that is reduced to 1e-4 at the end of training. The model is saved in the `./exps` folder.
+
+This training takes roughly ~3h on a single A100 (80GB) GPU. The plot of the training and validation loss should look roughly like this:
+
+<img src="./assets/loss_slimpajama.png" alt="Loss on SlimPajama" width="500"/>
+<img src="./assets/pplx_slimpajama.png" alt="Perplexity on SlimPajama" width="500"/>
+
 
 ## Less quick start
 
@@ -29,7 +35,7 @@ parser.add_argument('--acc_steps', default=4, type=int)
 parser.add_argument('--seed', default=0, type=int) # random seed for the parameters
 parser.add_argument('--data_seed', default=1337, type=int) # random seed defining the data ordering
 parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
-parser.add_argument('--iterations', default=40000, type=int) # total number of training iterations
+parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
 parser.add_argument('--lr', default=1e-3, type=float) 
 parser.add_argument('--warmup_percent', default=0.05, type=float) # the total number of warmup steps is iterations * warmup_percent
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
@@ -49,7 +55,7 @@ parser.add_argument('--model', default='base', choices=['base', 'llama2'])
 parser.add_argument('--use_pretrained', default="none", type=str) # 'none', 'gpt-2' or a path to the pretraind model
 parser.add_argument('--dropout', default=0.0, type=float) # keep to 0 unless in low data regime (e.g. wikitext)
 parser.add_argument('--n_head', default=12, type=int)
-parser.add_argument('--n_layer', default=24, type=int) # depth in (att + ff) blocks
+parser.add_argument('--n_layer', default=12, type=int) # depth in (att + ff) blocks
 parser.add_argument('--n_embd', default=768, type=int) # hidden size ... 
 parser.add_argument('--sequence_length', default=512, type=int)
 parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
@@ -68,7 +74,7 @@ parser.add_argument('--distributed_backend', default=None, type=str, required=Fa
 parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
 ```
 
-## Using WAndB
+## Using WandB
 
 You need to give your wandb authorize key in order to send the data to your wandb account. If you start jobs on a server without access to prompt, then you can set the `WANDB_API_KEY` variable within your script:
 

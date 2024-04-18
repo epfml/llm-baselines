@@ -111,7 +111,9 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 train_loss = loss.detach().cpu().item() * acc_steps
                 current_lr = scheduler.get_last_lr()[0] if scheduler is not None else extra_args.lr
                 
-                eval_steps = 24  # or choose full val set?
+                eval_steps = (
+                    24 if itr < iterations else len(data["val"])
+                )
                 val_acc, val_loss, val_perplexity = eval(
                     model,
                     data_val_iter,
@@ -127,14 +129,21 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 print(print_string)
 
                 if extra_args.wandb:
-                    wandb.log({
+                    logs = {
                         "iter": itr,
                         "train/loss": train_loss,
                         "val/loss": val_loss,
                         "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
                         "lr": current_lr,
-                    })
+                    }
+
+                    if itr == iterations:
+                        logs["val/final-ppl"] = val_perplexity
+                        logs["val/final-acc"] = val_acc
+                        logs["val/final-loss"] = val_loss
+
+                    wandb.log(logs)
 
                     if extra_args.eval_seq_prefix != 'none' and (itr % (eval_freq * 5) == 0 or itr == iterations):
                         if text_table is None:
