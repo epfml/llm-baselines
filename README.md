@@ -23,6 +23,8 @@ This training takes roughly ~3h on a single A100 (80GB) GPU. The plot of the tra
 <img src="./assets/loss_slimpajama.png" alt="Loss on SlimPajama" width="500"/>
 <img src="./assets/pplx_slimpajama.png" alt="Perplexity on SlimPajama" width="500"/>
 
+You can check out the wandb run for yourself [here](https://wandb.ai/haeggee/llm-lauzhack/runs/lm2obqy9?nw=nwuserhaeggee).
+
 
 ## Less quick start
 
