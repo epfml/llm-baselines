@@ -48,8 +48,8 @@ def main(args):
     if args.data_in_ram:
         data = {'train': np.array(data['train']), 'val': np.array(data['val'])}
         
-    print(f"Num training tokens: {len(data['train'])}")
-    print(f"Num validation tokens: {len(data['val'])}")
+    print(f"Num training tokens: {len(np.memmap(data['train'], dtype=np.uint16, mode='r'))}")
+    print(f"Num validation tokens: {len(np.memmap(data['val'], dtype=np.uint16, mode='r'))}")
     
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
 

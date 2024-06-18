@@ -47,5 +47,4 @@ def get_shakespeare_data():
         mem[:] = x_test
 
     # at this point we know that the binfile was properly created so we load it
-    return {"train": np.memmap(train_path, dtype=np.uint16, mode="r"),
-            "val": np.memmap(test_path, dtype=np.uint16, mode="r")}
+    return {"train": train_path, "val": test_path}

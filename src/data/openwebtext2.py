@@ -51,8 +51,5 @@ def get_openwebtext2_data(num_proc=40):
                 idx += len(arr_batch)
             arr.flush()
 
-    train_data = np.memmap(os.path.join(OWT2_DATA_PATH, 'train.bin'), dtype=np.uint16, mode='r')
-    val_data = np.memmap(os.path.join(OWT2_DATA_PATH, 'val.bin'), dtype=np.uint16, mode='r')
-
-    return {'train': train_data, 'val': val_data}
+    return {'train': os.path.join(OWT2_DATA_PATH, 'train.bin'), 'val': os.path.join(OWT2_DATA_PATH, 'val.bin')}
 

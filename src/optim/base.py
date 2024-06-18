@@ -35,7 +35,9 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     )
 
     num_substeps_per_epoch = len(data["train"])
-    train_epochs = substep//num_substeps_per_epoch
+    num_val_batches = len(data["val"])
+
+    train_epochs = substep // num_substeps_per_epoch
     
     if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
         train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
@@ -44,10 +46,6 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     else:
         sampler_state_before_iter = train_sampler.generator.get_state()
     data_train_iter = iter(data["train"])
-
-    
-    # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
-    data_val_iter = itertools.cycle(data["val"])
 
     stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
 
@@ -69,7 +67,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     for _ in range(substep % num_substeps_per_epoch):
         get_batch(data_train_iter, device=extra_args.device)
 
-    
+
     while itr < iterations:
             
         for microstep_idx in range(acc_steps):  # gradient accumulation
@@ -110,15 +108,16 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 model.eval()
                 train_loss = loss.detach().cpu().item() * acc_steps
                 current_lr = scheduler.get_last_lr()[0] if scheduler is not None else extra_args.lr
-                
-                eval_steps = (
-                    24 if itr < iterations else len(data["val"])
-                )
+                # set epoch and restart val loader as to always have same eval batches
+                if hasattr(val_sampler, "set_epoch"):
+                    val_sampler.set_epoch(0)
+                data_val_iter = iter(data["val"])
+
                 val_acc, val_loss, val_perplexity = eval(
                     model,
                     data_val_iter,
                     extra_args.device,
-                    max_num_batches=eval_steps,
+                    max_num_batches=32,
                     ctx=type_ctx,
                 )
 
@@ -133,15 +132,25 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         "iter": itr,
                         "train/loss": train_loss,
                         "val/loss": val_loss,
-                        "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
-                        "lr": current_lr,
+                        "val/pp": val_perplexity,
                     }
 
                     if itr == iterations:
-                        logs["val/final-ppl"] = val_perplexity
-                        logs["val/final-acc"] = val_acc
-                        logs["val/final-loss"] = val_loss
+                        # set epoch and restart val loader as to always have same eval batches (iter from beginning)
+                        if hasattr(val_sampler, "set_epoch"):
+                            val_sampler.set_epoch(0)
+                        data_val_iter = iter(data["val"])
+                        final_val_acc, final_val_loss, final_val_perplexity = eval(
+                            model,
+                            data_val_iter,
+                            extra_args.device,
+                            max_num_batches=num_val_batches,
+                            ctx=type_ctx,
+                        )
+                        logs["val/final-ppl"] = final_val_perplexity
+                        logs["val/final-acc"] = final_val_acc
+                        logs["val/final-loss"] = final_val_loss
 
                     wandb.log(logs)
 
