@@ -133,7 +133,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         "train/loss": train_loss,
                         "val/loss": val_loss,
                         "val/acc": val_acc,
-                        "val/pp": val_perplexity,
+                        "val/perplexity": val_perplexity,
+                        "lr": current_lr,
                     }
 
                     if itr == iterations:
