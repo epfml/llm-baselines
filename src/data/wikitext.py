@@ -36,7 +36,4 @@ def get_wikitext_data():
         eval_tokenized.tofile(os.path.join(WIKITEXT_DATA_PATH, 'val.bin'))
         print("completed the tokenization process!")
 
-    train_data = np.memmap(os.path.join(WIKITEXT_DATA_PATH, 'train.bin'), dtype=np.uint16, mode='r')
-    val_data = np.memmap(os.path.join(WIKITEXT_DATA_PATH, 'val.bin'), dtype=np.uint16, mode='r')
-
-    return {'train': train_data, 'val': val_data}
+    return {'train': os.path.join(WIKITEXT_DATA_PATH, 'train.bin'), 'val': os.path.join(WIKITEXT_DATA_PATH, 'val.bin')}
