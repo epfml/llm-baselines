@@ -15,7 +15,7 @@ from data.utils import get_dataset
 from optim.base import train_base
 import distributed
 
-
+import pdb
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('--config_format', default='base', choices=config.registered_formats())
@@ -44,13 +44,18 @@ def main(args):
     
     print(f"Loading dataset '{args.dataset}'")
     
+    num_curated_tok = int(args.num_curated_batch * args.sequence_length * args.batch_size)
+
     data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
     if args.data_in_ram:
-        data = {'train': np.array(data['train']), 'val': np.array(data['val'])}
-        
-    print(f"Num training tokens: {len(data['train'])}")
+        data = {'train': np.array(data['train'][num_curated_tok:]), 'val': np.array(data['val'])}
+    
+    print(f"Num curated tokens: {len(data['train'][:num_curated_tok])}")
+    print(f"Num training tokens: {len(data['train'][num_curated_tok:])}")
     print(f"Num validation tokens: {len(data['val'])}")
     
+    # pdb.set_trace()
+
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
 
     model = distributed_backend.transform_model(model)
@@ -141,8 +146,7 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-
-    stats = train(model, opt, data, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
+    stats = train(model, opt, data, args.gamma, num_curated_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
                   ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, extra_args=args)

@@ -12,15 +12,29 @@ import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
+import pdb
 
-def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
+def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
+               eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype)
     best_val_loss, text_table = float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
     substep = itr * acc_steps
+    data_cnt = 0
+    
+    print(f'Num curated tokens: {num_curated_tok}')
+    data["curated"], curated_sampler = get_dataloader(
+        data["train"][:num_curated_tok],
+        sequence_length=sequence_length,
+        batch_size=batch_size,
+        seed=data_seed,
+    )
+
+    num_train_seq = int(np.ceil(len(data["train"][num_curated_tok :]) / sequence_length))
+    w = torch.ones(num_train_seq)
     data["train"], train_sampler = get_dataloader(
-        data["train"],
+        data["train"][num_curated_tok : ],
         sequence_length=sequence_length,
         batch_size=batch_size,
         seed=data_seed,
@@ -34,8 +48,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         seed=data_seed,
     )
 
-    num_substeps_per_epoch = len(data["train"])
-    train_epochs = substep//num_substeps_per_epoch
+    num_substeps_per_epoch = len(data["train"]) 
+    train_epochs = substep//num_substeps_per_epoch # counting the current epoch
     
     if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
         train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
@@ -45,14 +59,15 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         sampler_state_before_iter = train_sampler.generator.get_state()
     data_train_iter = iter(data["train"])
 
-    
+    print(f'Data train: {len(data["train"])}')
+    print(f'Data curated: {len(data["curated"])}')
+
     # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
     data_val_iter = itertools.cycle(data["val"])
+    data_curated_iter = itertools.cycle(data["curated"])
 
-    stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
+    stats = {"curated_loss": [], "train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
 
-   
-    
     if extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
@@ -69,19 +84,52 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     for _ in range(substep % num_substeps_per_epoch):
         get_batch(data_train_iter, device=extra_args.device)
 
-    
+
     while itr < iterations:
-            
         for microstep_idx in range(acc_steps):  # gradient accumulation
-            x, y = get_batch(data_train_iter, device=extra_args.device)
-            
+            x0, y0 = get_batch(data_curated_iter, device=extra_args.device)
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    outputs = model(x, targets=y)
+                    outputs = model(x0, targets=y0)
+            loss0 = outputs['loss'] / acc_steps
+            loss0.backward()
+            grad0 = {name: param.grad.clone() for name, param in model.named_parameters()}
+            opt.zero_grad(set_to_none=True)
 
-            loss = outputs['loss'] / acc_steps
-            loss.backward()
+            x, y = get_batch(data_train_iter, device=extra_args.device)
+
+            grads_batch = grad0.copy()
+            loss = loss0.copy()
+            for i in range(x.size(0)):  # Iterate over each data point in the batch
+                xi = x[i].unsqueeze(0)  # Get the i-th data point
+                yi = y[i].unsqueeze(0)  # Get the i-th target
+                with type_ctx:
+                    with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+                        output_i = model(xi, targets=yi)
+                lossi = output_i['loss']
+                loss += w[data_cnt] * lossi 
+                lossi.backward()
+                gradi = {name: param.grad.clone() for name, param in model.named_parameters()}
+                # individual_gradients.append(current_gradients)
+                inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
+                # print(inner_product)
+                w[data_cnt] += gamma * inner_product
+                w[data_cnt] = torch.clamp(w[i], 0, 1)
+                # Accumulate the gradients
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        grads_batch[name] += w[data_cnt] * param.grad.clone()
+                opt.zero_grad(set_to_none=True)
+                data_cnt += 1
+            
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    param.grad = grads_batch[name]
             substep += 1
+
+            if data_cnt % num_train_seq == 0:
+                data_cnt = 0
+
             if substep % len(data["train"]) == 0:
                 train_epochs += 1
                 print(f"Train epoch {train_epochs} done (full pass over training data)")
@@ -93,6 +141,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     sampler_state_before_iter = train_sampler.generator.get_state()
                 data_train_iter = iter(data["train"])
 
+        data_curated_iter = iter(data["curated"])
+        # pdb.set_trace()
 
         if extra_args.grad_clip != 0.0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
@@ -157,6 +207,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
                 model.train()
                 t0 = time.time()
+
         if distributed_backend.is_master_process():
             if extra_args.save_checkpoint_freq is not None and itr % extra_args.save_checkpoint_freq == 0:
                 print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")
