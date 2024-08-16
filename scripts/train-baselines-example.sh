@@ -8,3 +8,6 @@ python ./src/main.py --model base --n_embd 768 --n_head 12 --wandb_run_prefix h7
 
 # for cpu
 python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare-char --device=cpu --vocab_size=96
+
+# for quick gpu test
+python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare-char --vocab_size=96
