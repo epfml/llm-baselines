@@ -193,6 +193,8 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
                 if extra_args.wandb:
                     logs = {
                         "iter": itr,
+                        "w_sum": sum(w),
+                        "curated/loss": curated_loss,
                         "train/loss": train_loss,
                         "val/loss": val_loss,
                         "val/perplexity": val_perplexity,
