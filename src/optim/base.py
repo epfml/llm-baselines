@@ -99,13 +99,11 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
         loss0.backward()
         grad0 = {name: param.grad.clone() for name, param in model.named_parameters()}
 
-        print(f'Curated loss: {loss0}')
+        # print(f'Curated loss: {loss0}')
 
         grads_batch = copy.deepcopy(grad0)
         loss = loss0.clone()
 
-        print(f'w_norm: {sum(w)}')
-        
         x, y = get_batch(data_train_iter, device=extra_args.device)
 
         for i in range(x.size(0)):  # Iterate over each data point in the batch
@@ -123,7 +121,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
             gradi = {name: param.grad.clone() for name, param in model.named_parameters()}
 
             inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
-            print(inner_product)
+            # print(inner_product)
 
             w[data_cnt] += gamma * inner_product
             w[data_cnt] = torch.clamp(w[i], 0, 1)
@@ -186,7 +184,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
                     ctx=type_ctx,
                 )
 
-                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
