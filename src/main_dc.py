@@ -12,7 +12,7 @@ import wandb
 import config
 from models.utils import get_model
 from data.utils import get_dataset
-from optim.base import train_base
+from optim.base_dc import train_base_dc
 import distributed
 
 import pdb
@@ -44,17 +44,24 @@ def main(args):
     
     print(f"Loading dataset '{args.dataset}'")
     
-    # num_curated_tok = int(args.num_curated_batch * args.sequence_length * args.batch_size)
+    num_curated_tok = int(args.num_curated_batch * args.sequence_length * args.batch_size)
 
     data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
     if args.data_in_ram:
-        data = {'train': np.array(data['train']), 'val': np.array(data['val'])}
+        data = {'train': np.array(data['train'][num_curated_tok:]), 'val': np.array(data['val'])}
     
     # random generate some data added to the training data
     np.random.seed(args.data_rd_seed)
     random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
     
-    print(f"Num training tokens: {len(data['train'])}")
+    print(f"Num trian tokens: {len(data['train'])}")
+
+    data['train'] = np.concatenate((data['train'], random_data))
+
+    print(f"Num train + random tokens: {len(data['train'])}")
+    
+    print(f"Num curated tokens: {len(data['train'][:num_curated_tok])}")
+    print(f"Num training tokens: {len(data['train'][num_curated_tok:])}")
     print(f"Num validation tokens: {len(data['val'])}")
     
     # pdb.set_trace()
@@ -145,12 +152,12 @@ def main(args):
             scheduler.load_state_dict(scheduler_state_dict)
 
     if args.model in ['base', 'llama2']: # all train functions have the same interface
-        train = train_base
+        train = train_base_dc
     else:
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
+    stats = train(model, opt, data, args.gamma, num_curated_tok, args.num_rand_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
                   ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, extra_args=args)

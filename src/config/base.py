@@ -14,6 +14,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--acc_steps', default=1, type=int) # 4
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--data_seed', default=1337, type=int)
+    parser.add_argument('--data_rd_seed', default=4, type=int)
     parser.add_argument('--device', default='cuda:0', type=str)
     parser.add_argument('--iterations', default=25000, type=int) # 25000
     parser.add_argument('--lr', default=1e-3, type=float)
@@ -30,7 +31,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
     parser.add_argument('--num_rand_tok', default=1000000, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--num_curated_batch', default=10, type=int) # number of curated tokens separated from the training data
-    parser.add_argument('--gamma', default=0.1, type=float) # step size for w
+    parser.add_argument('--gamma', default=0.05, type=float) # step size for w
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
