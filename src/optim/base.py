@@ -12,9 +12,10 @@ import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
+from torch import mean
 import pdb
 
-def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
+def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
                eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
@@ -32,8 +33,20 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
     )
 
     num_train_seq = int(np.ceil(len(data["train"][num_curated_tok :]) / sequence_length))
-    
+    num_rand_seq = int(np.ceil(num_rand_tok / sequence_length))
     w = torch.ones(num_train_seq, device=device_type)
+    w_gt = torch.zeros(num_train_seq, device=device_type)
+    w_gt[num_train_seq - num_rand_seq:] = 1
+    w_gt = w_gt.bool()
+    num_clean_seq  = num_train_seq - num_rand_seq
+    print(f'Num clean seq in train: {num_clean_seq}')
+    print(f'Num random seq: {num_rand_seq}')
+
+    w_gap = mean(w[w_gt]) - mean(w[~w_gt]) 
+    print(f'Initial w_gap: {w_gap}')
+    
+    # pdb.set_trace()
+
     data["train"], train_sampler = get_dataloader(
         data["train"][num_curated_tok : ],
         sequence_length=sequence_length,
@@ -166,7 +179,8 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
 
         data_curated_iter = iter(data["curated"])
 
-        if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
+        # if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
+        if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
             if distributed_backend.is_master_process():
                 t1 = time.time()
                 dt = t1 - t0
@@ -187,8 +201,10 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
                     max_num_batches=eval_steps,
                     ctx=type_ctx,
                 )
-
-                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                
+                w_gap = mean(w[w_gt]) - mean(w[~w_gt])    
+                                                     
+                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} w_gap={sum(w_gap):.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
@@ -204,6 +220,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
                         "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
                         "lr": current_lr,
+                        "w_gap": w_gap,
                     }
 
                     if itr == iterations:

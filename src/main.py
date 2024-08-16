@@ -50,11 +50,21 @@ def main(args):
     if args.data_in_ram:
         data = {'train': np.array(data['train'][num_curated_tok:]), 'val': np.array(data['val'])}
     
+    # random generate some data added to the training data
+    random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
+    
+    print(f"Num trian tokens: {len(data['train'])}")
+
+    data['train'] = np.concatenate((data['train'], random_data))
+
+    print(f"Num train + random tokens: {len(data['train'])}")
+    
     print(f"Num curated tokens: {len(data['train'][:num_curated_tok])}")
     print(f"Num training tokens: {len(data['train'][num_curated_tok:])}")
     print(f"Num validation tokens: {len(data['val'])}")
     
     # pdb.set_trace()
+
 
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
 
@@ -146,7 +156,7 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, num_curated_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
+    stats = train(model, opt, data, args.gamma, num_curated_tok, args.num_rand_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
                   ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, extra_args=args)
