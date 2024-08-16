@@ -113,8 +113,12 @@ def train_base(model, opt, data, gamma, num_curated_tok, data_seed, scheduler, i
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
                     output_i = model(xi, targets=yi)
-            lossi = output_i['loss']
-            loss += w[data_cnt] * lossi 
+                    
+            # lossi = output_i['loss']
+            # loss += w[data_cnt] * lossi
+            # 
+            lossi = w[data_cnt] * output_i['loss']
+            loss += lossi  
 
             opt.zero_grad(set_to_none=True)
             lossi.backward()
