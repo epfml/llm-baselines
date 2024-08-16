@@ -120,33 +120,34 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed
         x, y = get_batch(data_train_iter, device=extra_args.device)
 
         for i in range(x.size(0)):  # Iterate over each data point in the batch
+            if w[data_cnt] > 1e-2:
+                xi = x[i].unsqueeze(0)  # Get the i-th data point
+                yi = y[i].unsqueeze(0)  # Get the i-th target
+                with type_ctx:
+                    with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+                        output_i = model(xi, targets=yi)
+                        
+                # lossi = output_i['loss']
+                # loss += w[data_cnt] * lossi
+                # 
+                lossi = w[data_cnt] * output_i['loss']
+                loss += lossi  
 
-            xi = x[i].unsqueeze(0)  # Get the i-th data point
-            yi = y[i].unsqueeze(0)  # Get the i-th target
-            with type_ctx:
-                with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    output_i = model(xi, targets=yi)
-                    
-            # lossi = output_i['loss']
-            # loss += w[data_cnt] * lossi
-            # 
-            lossi = w[data_cnt] * output_i['loss']
-            loss += lossi  
+                opt.zero_grad(set_to_none=True)
+                lossi.backward()
+                gradi = {name: param.grad.clone() for name, param in model.named_parameters()}
 
-            opt.zero_grad(set_to_none=True)
-            lossi.backward()
-            gradi = {name: param.grad.clone() for name, param in model.named_parameters()}
-
-            inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
-            # print(inner_product)
-
-            w[data_cnt] += gamma * inner_product
-            w[data_cnt] = torch.clamp(w[i], 0, 1)
-            
-            # Accumulate the gradients
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    grads_batch[name] += w[data_cnt] * gradi[name]
+                # inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
+                # print(inner_product)
+                # w[data_cnt] += gamma * inner_product
+                cos_sim = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() / (torch.norm(grad0[name]) * torch.norm(gradi[name])) for name in grad0.keys())
+                w[data_cnt] += gamma * cos_sim
+                w[data_cnt] = torch.clamp(w[i], 0, 1)
+                
+                # Accumulate the gradients
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        grads_batch[name] += w[data_cnt] * gradi[name]
 
             data_cnt += 1
         
