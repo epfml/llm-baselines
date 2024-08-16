@@ -203,8 +203,8 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed
                 )
                 
                 w_gap = mean(w[w_gt]) - mean(w[~w_gt])    
-                                                     
-                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} w_gap={sum(w_gap):.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+
+                print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} w_gap={w_gap:.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
