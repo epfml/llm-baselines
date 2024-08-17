@@ -136,7 +136,6 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed
                 if extra_args.wandb:
                     logs = {
                         "iter": itr,
-                        "w_sum": sum(w),
                         "train/loss": train_loss,
                         "val/loss": val_loss,
                         "val/perplexity": val_perplexity,
