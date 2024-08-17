@@ -207,6 +207,7 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
 
                 print_string = f"{epoch}/{itr} [curated] loss={curated_loss:.3f} w_sum={sum(w):.3f} w_gap={w_gap:.3f} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
+                # print_string += f" w={w}"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
                 print(print_string)
@@ -222,6 +223,9 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                         "val/acc": val_acc,
                         "lr": current_lr,
                         "w_gap": w_gap,
+                        "w1_mean": mean(w[w_gt]),
+                        "w0_mean": mean(w[~w_gt]),
+                        "w": w,
                     }
 
                     if itr == iterations:
