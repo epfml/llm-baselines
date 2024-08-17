@@ -105,8 +105,8 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed
         opt.zero_grad(set_to_none=True)
         itr += 1
 
-        if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
-        # if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
+        # if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
+        if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
             if distributed_backend.is_master_process():
                 t1 = time.time()
                 dt = t1 - t0
