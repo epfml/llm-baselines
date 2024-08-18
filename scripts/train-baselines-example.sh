@@ -24,3 +24,12 @@ python ./src/main_dc.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_
 python ./src/main.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
 # nz
 python ./src/main_nz.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+
+
+# slimpajama
+# dc
+python ./src/main_dc.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+# bm
+python ./src/main.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+# nz
+python ./src/main_nz.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandbd
