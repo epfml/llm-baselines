@@ -29,10 +29,10 @@ python ./src/main_cr.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_
 
 # slimpajama
 # dc
-python ./src/main_dc.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_run_prefix slimpajama_dc
+python ./src/main_dc.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_project slimpajama --wandb_run_prefix dc 
 # bm
-python ./src/main.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_run_prefix slimpajama_bm
+python ./src/main.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_project slimpajama --wandb_run_prefix bm
 # nz
-python ./src/main_nz.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandbd --wandb_run_prefix slimpajama_nz
+python ./src/main_nz.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandbd --wandb_project slimpajama --wandb_run_prefix nz
 # cr
-python ./src/main_cr.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb  --wandb_run_prefix slimpajama_cr
+python ./src/main_cr.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_project slimpajama  --wandb_run_prefix cr
