@@ -175,10 +175,11 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                     # inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
                     # print(inner_product)
                     # w[data_cnt] += gamma * inner_product
-                    cos_sim = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys()) / (torch.norm(torch.cat([torch.flatten(grad0[name]) for name in grad0.keys()])) * torch.norm(torch.cat([torch.flatten(gradi[name]) for name in grad0.keys()])))
-                    # print(cos_sim)
 
-                    w[data_cnt] += gamma * cos_sim
+                    # wj = wj + ||g0|| cos_sim
+                    cos_sim_g0 = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys()) /  torch.norm(torch.cat([torch.flatten(gradi[name]) for name in grad0.keys()]))
+                    
+                    w[data_cnt] += gamma * cos_sim_g0
                     w[data_cnt] = torch.clamp(w[i], 0, 1)
                     
                     # Accumulate the gradients
@@ -313,5 +314,5 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
     artifact = wandb.Artifact('model_checkpoint', type='model')
     artifact.add_file(ckpt_path)
     wandb.log_artifact(artifact)
-    
+
     return stats
