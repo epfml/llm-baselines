@@ -175,7 +175,10 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                     # inner_product = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys())
                     # print(inner_product)
                     # w[data_cnt] += gamma * inner_product
-                    cos_sim = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() / (torch.norm(grad0[name]) * torch.norm(gradi[name])) for name in grad0.keys())
+                    cos_sim = sum((torch.flatten(grad0[name]) * torch.flatten(gradi[name])).sum() for name in grad0.keys()) / (torch.norm(torch.cat([torch.flatten(grad0[name]) for name in grad0.keys()])) * torch.norm(torch.cat([torch.flatten(gradi[name]) for name in grad0.keys()])))
+                    print(cos_sim)
+
+                    pdb.set_trace()
                     w[data_cnt] += gamma * cos_sim
                     w[data_cnt] = torch.clamp(w[i], 0, 1)
                     
@@ -215,8 +218,8 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
 
         # data_curated_iter = iter(data["curated"])
 
-        # if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
-        if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
+        if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
+        # if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
             if distributed_backend.is_master_process():
                 t1 = time.time()
                 dt = t1 - t0
