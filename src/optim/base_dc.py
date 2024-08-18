@@ -309,4 +309,9 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                         itr=itr,
                         ckpt_path=ckpt_path)
 
+
+    artifact = wandb.Artifact('model_checkpoint', type='model')
+    artifact.add_file(ckpt_path)
+    wandb.log_artifact(artifact)
+    
     return stats

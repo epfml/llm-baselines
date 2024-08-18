@@ -54,7 +54,7 @@ def main(args):
     np.random.seed(args.data_rd_seed)
     random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
     
-    print(f"Num trian tokens: {len(data['train'])}")
+    print(f"Num train tokens: {len(data['train'])}")
 
     data['train'] = np.concatenate((data['train'], random_data))
 

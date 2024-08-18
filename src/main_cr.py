@@ -51,8 +51,8 @@ def main(args):
         data = {'train': np.array(data['train'][:num_curated_tok]), 'val': np.array(data['val'])}
     
     # random generate some data added to the training data
-    np.random.seed(args.data_rd_seed)
-    random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
+    # np.random.seed(args.data_rd_seed)
+    # random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
     
     print(f"Num training tokens is num curated tokens in dc: {len(data['train'])}")
     print(f"Num validation tokens: {len(data['val'])}")

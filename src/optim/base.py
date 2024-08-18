@@ -186,5 +186,9 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed
                         scheduler=scheduler,
                         itr=itr,
                         ckpt_path=ckpt_path)
+        
+    artifact = wandb.Artifact('model_checkpoint', type='model')
+    artifact.add_file(ckpt_path)
+    wandb.log_artifact(artifact)
 
     return stats
