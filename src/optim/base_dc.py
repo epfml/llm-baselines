@@ -33,6 +33,8 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
         seed=data_seed,
     )
 
+    num_curate_batch = len(data["curated"])
+
     num_train_seq = int(np.ceil(len(data["train"][num_curated_tok :]) / sequence_length))
     num_rand_seq = int(np.ceil(num_rand_tok / sequence_length))
     w = torch.ones(num_train_seq, device=device_type)
@@ -99,25 +101,58 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
     for _ in range(substep % num_substeps_per_epoch):
         get_batch(data_train_iter, device=extra_args.device)
 
-
     while itr < iterations:
         for microstep_idx in range(acc_steps):
-            x0, y0 = get_batch(data_curated_iter, device=extra_args.device)
-            with type_ctx:
-                with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    outputs = model(x0, targets=y0)
-            loss0 = outputs['loss'] / acc_steps
-            
-            opt.zero_grad(set_to_none=True)
-            loss0.backward()
-            grad0 = {name: param.grad.clone() for name, param in model.named_parameters()}
-
-            # print(f'Curated loss: {loss0}')
+            grad0 = {name: torch.zeros_like(param) for name, param in model.named_parameters()}
+            loss0 = 0
+            for _ in range(num_curate_batch):
+                x0, y0 = get_batch(data_curated_iter, device=extra_args.device)
+                with type_ctx:
+                    with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+                        outputs = model(x0, targets=y0)
+                loss0i = outputs['loss'] / acc_steps
+                opt.zero_grad(set_to_none=True)
+                loss0i.backward()
+                grad0i = {name: param.grad.clone() for name, param in model.named_parameters()}
+                for name, param in model.named_parameters():
+                    grad0[name] += grad0i[name] / num_curate_batch
+                loss0 += loss0i / num_curate_batch
 
             grads_batch = copy.deepcopy(grad0)
             loss = loss0.clone()
 
             x, y = get_batch(data_train_iter, device=extra_args.device)
+
+            # # to check the batch grad is the MEAN (not the sum) of the individual grads
+            # with type_ctx:
+            #     with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+            #         output = model(x, targets=y)  
+            # loss = output['loss']
+            # opt.zero_grad(set_to_none=True)
+            # loss.backward()
+            # grad_b = {name: param.grad.clone() for name, param in model.named_parameters()}
+            # print('Grad_b: ', grad_b['transformer.h.22.mlp.c_proj.weight'][:2])
+            
+            # grad_sum = {name: torch.zeros_like(grad_b[name]) for name in grad_b.keys()}
+            # for i in range(x.size(0)):  # Iterate over each data point in the batch
+            #     xi = x[i].unsqueeze(0)  # Get the i-th data point
+            #     yi = y[i].unsqueeze(0)  # Get the i-th target
+            #     with type_ctx:
+            #         with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+            #             output_i = model(xi, targets=yi)
+
+            #     lossi = output_i['loss']
+            #     opt.zero_grad(set_to_none=True)
+            #     lossi.backward()
+            #     gradi = {name: param.grad.clone() for name, param in model.named_parameters()}
+            #     for name, param in model.named_parameters():
+            #         grad_sum[name] += gradi[name]
+            # print('Grad_sum: ', grad_sum['transformer.h.22.mlp.c_proj.weight'][:2])
+
+            # pdb.set_trace()
+                
+
+            
 
             for i in range(x.size(0)):  # Iterate over each data point in the batch
                 if w[data_cnt] > 1e-2:
@@ -127,11 +162,11 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                         with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
                             output_i = model(xi, targets=yi)
                             
-                    # lossi = output_i['loss']
-                    # loss += w[data_cnt] * lossi
+                    lossi = output_i['loss']
+                    loss += w[data_cnt] * lossi / batch_size
                     # 
-                    lossi = w[data_cnt] * output_i['loss']
-                    loss += lossi  
+                    # lossi = w[data_cnt] * output_i['loss']
+                    # loss += lossi  
 
                     opt.zero_grad(set_to_none=True)
                     lossi.backward()
@@ -147,7 +182,7 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                     # Accumulate the gradients
                     for name, param in model.named_parameters():
                         if param.grad is not None:
-                            grads_batch[name] += w[data_cnt] * gradi[name]
+                            grads_batch[name] += w[data_cnt] * gradi[name] / batch_size
 
                 data_cnt += 1
         
