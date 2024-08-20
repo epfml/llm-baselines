@@ -38,30 +38,38 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
     num_train_seq = int(np.ceil(len(data["train"][num_curated_tok :]) / sequence_length))
     num_rand_seq = int(np.ceil(num_rand_tok / sequence_length))
     w = torch.ones(num_train_seq, device=device_type)
-    w_gt = torch.zeros(num_train_seq, device=device_type)
+    w_gt = np.zeros(num_train_seq)
     w_gt[num_train_seq - num_rand_seq:] = 1
+    w_gt_sum = sum(w_gt)
 
-    g = torch.Generator()
-    g.manual_seed(data_seed)
-    sampler_w = torch.utils.data.RandomSampler(
-            w_gt, replacement=False, generator=g)
+    w_loader, w_sampler = get_dataloader(
+        w_gt,
+        sequence_length=1,
+        batch_size=1,
+        seed=data_seed,
+        distributed_backend=distributed_backend,
+    )
+    # print(f'w_loader: {w_loader}')
 
-    w_gt = torch.utils.data.DataLoader(
-        w_gt, sampler=sampler_w, batch_size=1)
-
-    w_list = []
-    for wi in w_gt:
-        wii = wi[0]
-        w_list.append(wii)
-
-    w_gt = torch.tensor(w_list).bool()
+    w_list1 = []
+    w_list2 = []
+    for wi, wj in w_loader:
+        w_list1.append(wi[0])
+        w_list2.append(wj[0])
+    w_list1.append(w_list2[-1])
+    w_gt_tensor = torch.tensor(w_list1, device=device_type)
+    w_gt = w_gt_tensor.bool()
+    print(f'w_gt: {w_gt}')
+    # pdb.set_trace()
 
     num_clean_seq  = num_train_seq - num_rand_seq
     print(f'Num clean seq in train: {num_clean_seq}')
     print(f'Num random seq: {num_rand_seq}')
 
     w_gap = mean(w[w_gt]) - mean(w[~w_gt]) 
+    w_error = mean((w - w_gt_tensor) ** 2)
     print(f'Initial w_gap: {w_gap}')
+    print(f'Initial w_error: {w_error}')
     
     # pdb.set_trace()
 
@@ -220,6 +228,9 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
             data_cnt = 0
 
         if substep % len(data["train"]) == 0:
+            if sum(w) <= w_gt_sum:
+                w[w > 0.5] = 1
+                w[w <= 0.5] = 0
             train_epochs += 1
             print(f"Train epoch {train_epochs} done (full pass over training data)")
             if hasattr(train_sampler, "set_epoch"):
@@ -279,6 +290,7 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
                         "w1_mean": mean(w[w_gt]),
                         "w0_mean": mean(w[~w_gt]),
                         "w": w,
+                        "w_error": mean((w - w_gt_tensor) ** 2),
                     }
 
                     if itr == iterations:
