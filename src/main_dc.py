@@ -54,20 +54,23 @@ def main(args):
     np.random.seed(args.data_rd_seed)
     random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
     
-    print(f"Num trian tokens: {len(data['train'])}")
+    print(f"Before splitting curated, Num original clean trian tokens: {len(data['train'])}")
 
     data['train'] = np.concatenate((data['train'], random_data))
-
-    print(f"Num train + random tokens: {len(data['train'])}")
+    print(f"Num random tokens: {len(random_data)}")
+    print(f"Num clean train + random tokens: {len(data['train'])}")
     
-    print(f"Num curated tokens: {len(data['train'][:num_curated_tok])}")
+    print(f"After splitting the curated, Num curated tokens: {len(data['train'][:num_curated_tok])}")
     print(f"Num training tokens: {len(data['train'][num_curated_tok:])}")
     print(f"Num validation tokens: {len(data['val'])}")
-    
-    # pdb.set_trace()
-
 
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
+    if args.use_pretrained != 'none':
+        api = wandb.Api()
+        artifact = api.artifact('implicitfaith/slimpajama/model_checkpoint:v2', type='model')
+        artifact_dir = artifact.download()
+        checkpoint = torch.load("artifacts/model_checkpoint:v2/ckpt.pt")
+        model.load_state_dict(checkpoint['model'])
 
     model = distributed_backend.transform_model(model)
     
@@ -126,30 +129,30 @@ def main(args):
         else:
             args.use_pretrained = None
     
-    if args.use_pretrained is not None:
-        last_ckpt_path = args.use_pretrained
-        print(f"Resuming from {last_ckpt_path}")
-        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
-        model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
-        # FIXME checkpoints from compiled model have _orig_mod keyword
+    # if args.use_pretrained is not None:
+    #     last_ckpt_path = args.use_pretrained
+    #     print(f"Resuming from {last_ckpt_path}")
+    #     checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+    #     model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
+    #     # FIXME checkpoints from compiled model have _orig_mod keyword
 
-        optimizer_state_dict = checkpoint['optimizer']
-        rng_state_dict = {
-            module: checkpoint[module] for module in [
-                "cpu_rng_state", 
-                "gpu_rng_state", 
-                "numpy_rng_state", 
-                "py_rng_state",
-                "train_sampler_state"
-            ]
-        }
+    #     optimizer_state_dict = checkpoint['optimizer']
+    #     rng_state_dict = {
+    #         module: checkpoint[module] for module in [
+    #             "cpu_rng_state", 
+    #             "gpu_rng_state", 
+    #             "numpy_rng_state", 
+    #             "py_rng_state",
+    #             "train_sampler_state"
+    #         ]
+    #     }
 
-        model.load_state_dict(model_state_dict) 
-        opt.load_state_dict(optimizer_state_dict)
-        itr = checkpoint['itr']
-        if scheduler is not None:
-            scheduler_state_dict = checkpoint['scheduler']
-            scheduler.load_state_dict(scheduler_state_dict)
+    #     model.load_state_dict(model_state_dict) 
+    #     opt.load_state_dict(optimizer_state_dict)
+    #     itr = checkpoint['itr']
+    #     if scheduler is not None:
+    #         scheduler_state_dict = checkpoint['scheduler']
+    #         scheduler.load_state_dict(scheduler_state_dict)
 
     if args.model in ['base', 'llama2']: # all train functions have the same interface
         train = train_base_dc

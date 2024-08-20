@@ -19,13 +19,13 @@ python ./src/main.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --wandb
 
 # 2024-08-16
 # dc
-python ./src/main_dc.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+python ./src/main_dc.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --use_pretrained yes
 # bm
-python ./src/main.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+python ./src/main.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --use_pretrained yes
 # nz
-python ./src/main_nz.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+python ./src/main_nz.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --use_pretrained yes
 # cr
-python ./src/main_cr.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb
+python ./src/main_cr.py --dataset=shakespeare-char --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --use_pretrained yes
 
 # slimpajama
 # dc

@@ -67,6 +67,12 @@ def main(args):
 
 
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
+    if args.use_pretrained != 'none':
+        api = wandb.Api()
+        artifact = api.artifact('implicitfaith/slimpajama/model_checkpoint:v2', type='model')
+        artifact_dir = artifact.download()
+        checkpoint = torch.load("artifacts/model_checkpoint:v2/ckpt.pt")
+        model.load_state_dict(checkpoint['model'])
 
     model = distributed_backend.transform_model(model)
     
@@ -125,30 +131,30 @@ def main(args):
         else:
             args.use_pretrained = None
     
-    if args.use_pretrained is not None:
-        last_ckpt_path = args.use_pretrained
-        print(f"Resuming from {last_ckpt_path}")
-        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
-        model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
-        # FIXME checkpoints from compiled model have _orig_mod keyword
+    # if args.use_pretrained is not None:
+    #     last_ckpt_path = args.use_pretrained
+    #     print(f"Resuming from {last_ckpt_path}")
+    #     checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+    #     model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
+    #     # FIXME checkpoints from compiled model have _orig_mod keyword
 
-        optimizer_state_dict = checkpoint['optimizer']
-        rng_state_dict = {
-            module: checkpoint[module] for module in [
-                "cpu_rng_state", 
-                "gpu_rng_state", 
-                "numpy_rng_state", 
-                "py_rng_state",
-                "train_sampler_state"
-            ]
-        }
+    #     optimizer_state_dict = checkpoint['optimizer']
+    #     rng_state_dict = {
+    #         module: checkpoint[module] for module in [
+    #             "cpu_rng_state", 
+    #             "gpu_rng_state", 
+    #             "numpy_rng_state", 
+    #             "py_rng_state",
+    #             "train_sampler_state"
+    #         ]
+    #     }
 
-        model.load_state_dict(model_state_dict) 
-        opt.load_state_dict(optimizer_state_dict)
-        itr = checkpoint['itr']
-        if scheduler is not None:
-            scheduler_state_dict = checkpoint['scheduler']
-            scheduler.load_state_dict(scheduler_state_dict)
+    #     model.load_state_dict(model_state_dict) 
+    #     opt.load_state_dict(optimizer_state_dict)
+    #     itr = checkpoint['itr']
+    #     if scheduler is not None:
+    #         scheduler_state_dict = checkpoint['scheduler']
+    #         scheduler.load_state_dict(scheduler_state_dict)
 
     if args.model in ['base', 'llama2']: # all train functions have the same interface
         train = train_base

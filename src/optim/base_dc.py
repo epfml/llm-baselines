@@ -40,7 +40,22 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
     w = torch.ones(num_train_seq, device=device_type)
     w_gt = torch.zeros(num_train_seq, device=device_type)
     w_gt[num_train_seq - num_rand_seq:] = 1
-    w_gt = w_gt.bool()
+
+    g = torch.Generator()
+    g.manual_seed(data_seed)
+    sampler_w = torch.utils.data.RandomSampler(
+            w_gt, replacement=False, generator=g)
+
+    w_gt = torch.utils.data.DataLoader(
+        w_gt, sampler=sampler_w, batch_size=1)
+
+    w_list = []
+    for wi in w_gt:
+        wii = wi[0]
+        w_list.append(wii)
+
+    w_gt = torch.tensor(w_list).bool()
+
     num_clean_seq  = num_train_seq - num_rand_seq
     print(f'Num clean seq in train: {num_clean_seq}')
     print(f'Num random seq: {num_rand_seq}')
@@ -218,8 +233,8 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
 
         # data_curated_iter = iter(data["curated"])
 
-        if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
-        # if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
+        # if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
+        if substep % len(data["train"]) == 0 or itr == iterations: # when finish one epoch, do evaluation
             if distributed_backend.is_master_process():
                 t1 = time.time()
                 dt = t1 - t0
