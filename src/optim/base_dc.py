@@ -228,9 +228,9 @@ def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_s
             data_cnt = 0
 
         if substep % len(data["train"]) == 0:
-            if sum(w) <= w_gt_sum:
-                w[w > 0.5] = 1
-                w[w <= 0.5] = 0
+            # if sum(w) <= w_gt_sum:
+            #     w[w > 0.5] = 1
+            #     w[w <= 0.5] = 0
             train_epochs += 1
             print(f"Train epoch {train_epochs} done (full pass over training data)")
             if hasattr(train_sampler, "set_epoch"):
