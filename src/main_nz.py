@@ -68,10 +68,7 @@ def main(args):
 
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
     if args.use_pretrained != 'none':
-        api = wandb.Api()
-        artifact = api.artifact('implicitfaith/slimpajama/model_checkpoint:v2', type='model')
-        artifact_dir = artifact.download()
-        checkpoint = torch.load("artifacts/model_checkpoint:v2/ckpt.pt")
+        checkpoint = torch.load("/linx-scratch/yunzhen/pretrained_models/slim_gpt2/ckpt.pt")
         model.load_state_dict(checkpoint['model'])
 
     model = distributed_backend.transform_model(model)
