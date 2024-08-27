@@ -8,6 +8,8 @@ from .arxiv import get_arxiv_2000, get_arxiv_full
 from .openwebtext2 import get_openwebtext2_data
 from .slimpajama import get_slimpajama_data
 
+import os
+import requests
 
 def get_dataset(args) -> Dict[str, np.ndarray]:
     """ Fetch the right dataset given by the args.dataset parameter. The logic for each dataset is
@@ -56,6 +58,52 @@ class Dataset(torch.utils.data.Dataset):
         )
         return x, y
 
+def token2seq(tokens, max_seq_length, seed=0):
+    # return seq_shuffled, a list of seqs
+    len_tokens = len(tokens)
+    seq = []
+    for i in range(len_tokens // max_seq_length):
+        x = tokens[i*max_seq_length:(i+1)*max_seq_length]
+        seq.append(x)
+    
+    return seq
+
+def get_shakespeare(tokenizer, max_seq_length):
+    char_tknzr = tokenizer.encode
+    DATA_PATH = os.path.join(os.getcwd(), "datasets", "shakespeare")
+    raw_path = os.path.join(DATA_PATH, "raw.txt")
+    train_path = os.path.join(DATA_PATH, f"train.npy")
+    test_path = os.path.join(DATA_PATH, f"test.npy")
+    # if path is not even there, download all data
+    if not os.path.exists(DATA_PATH):
+        print("Downloading raw Shakespeare texts")
+        url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+        os.makedirs(DATA_PATH, exist_ok=True)
+        text = requests.get(url, timeout=60).text
+        with open(raw_path, "w+", encoding="utf8") as f:
+            f.write(text)
+    
+    if not os.path.exists(train_path) or not os.path.exists(test_path):
+        print("Tokenizing Shakespeare texts")
+        # load text
+        with open(raw_path, encoding="utf8") as f:
+            text = "".join(f.readlines())
+        # encode text
+        tokens = np.array(char_tknzr(text))
+        # seqs, shuffled_id = token2seq(x_all, max_seq_length)
+        # train = seqs[:int(0.8*len(seqs))]
+        # val = seqs[int(0.8*len(seqs)):]
+        # mem = np.memmap(train_path, dtype=np.uint16, mode="w+", shape=(len(x_seq_train), max_seq_length))
+        # for i, x in enumerate(x_seq_train):
+        #     mem[i] = x
+        # mem = np.memmap(test_path, dtype=np.uint16, mode="w+", shape=(len(x_seq_test), max_seq_length))
+        # for i, x in enumerate(x_seq_test):
+        #     mem[i] = x
+        train_tokens = tokens[:int(0.8*len(tokens))]
+        val_tokens = tokens[int(0.8*len(tokens)):]
+    print(f'Numer of tokens in Shakespeare: {len(tokens)}, train: {len(train_tokens)}, val: {len(val_tokens)}')
+
+    return train_tokens, val_tokens
 
 def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backend=None):
     """Create a DataLoader for the given data. If distributed_backend is provided and is truly
@@ -86,3 +134,36 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
         num_workers=0,
     )
     return loader, sampler
+
+
+class MyDataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def __len__(self):
+        # chunk the data into sequences of length `sequence_length`
+        # NOTE: we discard the last remainding sequence if it's not of length `sequence_length`
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        return sample
+    
+def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
+    # dataset is aa dict: {'train': a list of tokens with seq_len, 'val': eval_tokenized}
+    train_dataset = MyDataset(dataset['train']) 
+    val_dataset = MyDataset(dataset['val'])
+    print(f"dataset size (num seq: num_tokens / seq_len), train : {len(train_dataset)}, val: {len(val_dataset)}")
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+    print(f"num steps (num_tokens / seq_len / num_batch): {len(train_loader)}, val: {len(val_loader)}")
+    return train_loader, val_loader

@@ -23,19 +23,19 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--beta1', default=0.9, type=float)
     parser.add_argument('--beta2', default=0.95, type=float)
     parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
-    parser.add_argument('--opt', default='sgd', choices=['adamw', 'sgd'])
+    parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd'])
     parser.add_argument('--eval_freq', default=5, type=int) # 200 in iterations
     parser.add_argument('--results_base_folder', default="./exps", type=str) 
     parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
     # Dataset params
-    parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
+    parser.add_argument('--dataset', default='shakespeare', choices=['slimpajama', 'wikitext', "shakespeare-char", 'shakespeare', 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
     parser.add_argument('--num_rand_tok', default=1000000, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--num_curated_batch', default=3, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--gamma', default=0.001, type=float) # step size for w
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
-    parser.add_argument('--model', default='base', choices=['base', 'llama2'])
+    parser.add_argument('--model', default='gpt2-pretrained', choices=['base', 'llama2', 'gpt2-pretrained'])
     parser.add_argument('--use_pretrained', default='none', type=none_or_str) # 'auto' # 'none', 'gpt-2' or a path to the pretraind model
     parser.add_argument('--dropout', default=0.0, type=float)
     parser.add_argument('--n_head', default=12, type=int)

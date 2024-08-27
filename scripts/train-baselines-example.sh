@@ -36,3 +36,6 @@ python ./src/main.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 
 python ./src/main_nz.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandbd --wandb_project slimpajama --wandb_run_prefix nz
 # cr
 python ./src/main_cr.py --dataset=slimpajama --n_embd 768 --n_head 12 --n_layer 24 --batch_size 100 --sequence_length 512 --acc_steps 1 --dropout 0.05 --wandb --wandb_project slimpajama  --wandb_run_prefix cr
+
+# 2024-08-27
+python ./src/main_copy.py --dataset=shakespeare --batch_size 64 --sequence_length 256 --acc_steps 1 --dropout 0.05 --wandb --wandb_project pretr-gpt2-shkspr 
