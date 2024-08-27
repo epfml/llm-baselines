@@ -19,6 +19,8 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         return get_wikitext_data()
     if args.dataset == "shakespeare-char":
         return get_shakespeare_data()
+    if args.dataset == "shakespeare":
+        return get_shakespeare() # return train_tokens, val_tokens
     if args.dataset == "arxiv2000":
         return get_arxiv_2000()
     if args.dataset == "arxiv":

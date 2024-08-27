@@ -11,11 +11,14 @@ import wandb
 
 import config
 from models.utils import get_model
-from data.utils import get_dataset
+from data.utils import get_dataset, get_shakespeare, token2seq
 from optim.base import train_base
 import distributed
+import tiktoken
 
 import pdb
+
+
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('--config_format', default='base', choices=config.registered_formats())
@@ -27,6 +30,7 @@ def get_args():
 
 def main(args): 
 
+    ## DEVICE SETUP
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
 
@@ -38,36 +42,19 @@ def main(args):
     if device_type == "cuda":
         torch.cuda.set_device(args.device)
 
+    ## RANDOM SEEDS
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    
-    print(f"Loading dataset '{args.dataset}'")
-    
-    # num_curated_tok = int(args.num_curated_batch * args.sequence_length * args.batch_size)
 
-    data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
-    if args.data_in_ram:
-        data = {'train': np.array(data['train']), 'val': np.array(data['val'])}
-    
-    # random generate some data added to the training data
-    np.random.seed(args.data_rd_seed)
-    random_data = np.random.randint(low=0, high=100, size=(args.num_rand_tok,), dtype=np.uint16)
-    
-    print(f"Num training tokens: {len(data['train'])}")
-    print(f"Num validation tokens: {len(data['val'])}")
-    
-    # pdb.set_trace()
-
-
-    model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
+    ## MODEL AND TOKENIZER SETUP
+    model = get_model(args).to(args.device) 
     if args.use_pretrained != 'none':
-        # api = wandb.Api()
-        # artifact = api.artifact('implicitfaith/slimpajama/model_checkpoint:v2', type='model')
-        # artifact_dir = artifact.download()
         checkpoint = torch.load("/linx-scratch/yunzhen/pretrained_models/slim_gpt2/ckpt.pt")
         model.load_state_dict(checkpoint['model'])
     model = distributed_backend.transform_model(model)
+    tokenizer = tiktoken.get_encoding("gpt2")
+    voab_size = tokenizer.vocab_size
     
     group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
@@ -80,6 +67,26 @@ def main(args):
         g["params"] = params
         optimized_params_cnt += sum([p.numel() for p in g["params"]])
     print("number of optimized parameters: %.2fM" % (optimized_params_cnt/1e6,))
+
+    ## DATA SETUP
+    print(f"Loading dataset '{args.dataset}'")
+    # data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
+    if args.dataset == 'shakespeare':
+        train_tokens, val_tokens = get_shakespeare(tokenizer = tokenizer) # data is a dict: {'train': a list of tokenized seqs, 'val': val_tokenized}
+    else:
+        raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
+    train_seq = token2seq(tokens = train_tokens, max_seq_length = args.sequence_length)
+    val_seq = token2seq(tokens = val_tokens, max_seq_length = args.sequence_length)
+    
+    # random generate some data added to the training data
+    np.random.seed(args.data_rd_seed)
+    random_data = np.random.randint(low=0, high=voab_size, size=(args.num_rand_tok,), dtype=np.uint16)
+    
+    print(f"Num training tokens: {len(data['train'])}")
+    print(f"Num validation tokens: {len(data['val'])}")
+
+
+    ## OPTIMIZER SETUP
     if args.opt == 'adamw':
         use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
         print(f"using fused AdamW: {use_fused}")
@@ -99,8 +106,9 @@ def main(args):
     else:
         scheduler = None
 
-    args.world_size = distributed_backend.get_world_size()
+    ## LOGGING SETUP
     exp_name = args.exp_name
+
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
@@ -115,39 +123,16 @@ def main(args):
         print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
         sys.exit(0)
 
+    ## TRAINING
     itr = 0
+    args.world_size = distributed_backend.get_world_size()
     rng_state_dict = None
-    if args.use_pretrained == "auto":
-        checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
-        if checkpoints:
-            args.use_pretrained = sorted(checkpoints)[-1]
-        else:
-            args.use_pretrained = None
-    
-    # if args.use_pretrained is not None:
-    #     last_ckpt_path = args.use_pretrained
-    #     print(f"Resuming from {last_ckpt_path}")
-    #     checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
-    #     model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
-    #     # FIXME checkpoints from compiled model have _orig_mod keyword
-
-    #     optimizer_state_dict = checkpoint['optimizer']
-    #     rng_state_dict = {
-    #         module: checkpoint[module] for module in [
-    #             "cpu_rng_state", 
-    #             "gpu_rng_state", 
-    #             "numpy_rng_state", 
-    #             "py_rng_state",
-    #             "train_sampler_state"
-    #         ]
-    #     }
-
-    #     model.load_state_dict(model_state_dict) 
-    #     opt.load_state_dict(optimizer_state_dict)
-    #     itr = checkpoint['itr']
-    #     if scheduler is not None:
-    #         scheduler_state_dict = checkpoint['scheduler']
-    #         scheduler.load_state_dict(scheduler_state_dict)
+    # if args.use_pretrained == "auto":
+    #     checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
+    #     if checkpoints:
+    #         args.use_pretrained = sorted(checkpoints)[-1]
+    #     else:
+    #         args.use_pretrained = None
 
     if args.model in ['base', 'llama2']: # all train functions have the same interface
         train = train_base
@@ -155,10 +140,12 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
-                  eval_freq=args.eval_freq, 
+    stats = train(model, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, 
+                  args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, 
+                  args.sequence_length, eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
-                  ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, extra_args=args)
+                  ckpt_path=f"{ckpt_path}/ckpt.pt", itr=itr, rng_state_dict=rng_state_dict, 
+                  extra_args=args)
     
     args.device = None
     args.dtype = None
