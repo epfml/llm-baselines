@@ -161,6 +161,9 @@ def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
     # dataset is aa dict: {'train': a list of tokens with seq_len, 'val': eval_tokenized}
     train_dataset = MyDataset(dataset['train']) 
     val_dataset = MyDataset(dataset['val'])
+    perm = np.random.RandomState(seed=seed).permutation(len(train_dataset))
+    train_dataset = torch.utils.data.Subset(train_dataset, perm)
+
     print(f"dataset size (num seq: num_tokens / seq_len), train : {len(train_dataset)}, val: {len(val_dataset)}")
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -173,4 +176,4 @@ def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
         shuffle=False,
     )
     print(f"num steps (num_tokens / seq_len / num_batch): {len(train_loader)}, val: {len(val_loader)}")
-    return train_loader, val_loader
+    return train_loader, val_loader, perm

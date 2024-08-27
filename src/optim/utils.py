@@ -32,7 +32,7 @@ def eval(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullcontext
     for _ in range(max_num_batches): 
         x, y = get_batch(data_val_iter, device=device)
         with ctx:
-            outputs = model(x, targets=y, get_logits=True)
+            outputs = model(x, targets=x, get_logits=True) # targets=y
         val_loss = outputs['loss']
         loss_list_val.append(val_loss)
         acc_list.append((outputs['logits'].argmax(-1) == y).float().mean())
@@ -52,11 +52,12 @@ def eval_gpt2(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullco
     for _ in range(max_num_batches): 
         x = get_one_batch(data_val_iter, device=device)
         with ctx:
-            outputs = model(x, labels=x)
-        val_loss = outputs.loss.item()
+            # outputs = model(x, labels=x)
+            outputs = model(x, targets=x, get_logits=True) # GPTBase
+        val_loss = outputs['loss']
         loss_list.append(val_loss)
         # Calculate token-level accuracy
-        logits = outputs.logits
+        logits = outputs['logits']
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = x[..., 1:].contiguous()
         # Flatten the tokens

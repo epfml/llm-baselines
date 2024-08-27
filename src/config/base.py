@@ -10,36 +10,39 @@ def none_or_str(value):
 def parse_args(base_parser, args, namespace):
     parser = base_parser
     # General training params
-    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--batch_size', default=100, type=int)
     parser.add_argument('--acc_steps', default=1, type=int) # 4
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--data_seed', default=1337, type=int)
     parser.add_argument('--data_rd_seed', default=4, type=int)
     parser.add_argument('--device', default='cuda:0', type=str)
     parser.add_argument('--iterations', default=25000, type=int) # 25000
-    parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--max_epochs', default=200, type=int) # 25000
+    parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--warmup_percent', default=0.05, type=float)
     parser.add_argument('--weight_decay', default=0.1, type=float)
     parser.add_argument('--beta1', default=0.9, type=float)
     parser.add_argument('--beta2', default=0.95, type=float)
     parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
     parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd'])
-    parser.add_argument('--eval_freq', default=5, type=int) # 200 in iterations
+    parser.add_argument('--eval_freq', default=20, type=int) # 200 in iterations
     parser.add_argument('--results_base_folder', default="./exps", type=str) 
     parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
     # Dataset params
     parser.add_argument('--dataset', default='shakespeare', choices=['slimpajama', 'wikitext', "shakespeare-char", 'shakespeare', 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
+    parser.add_argument('--add_random_tokens', action='store_true') # add random tokens to the training data
+
     parser.add_argument('--num_rand_tok', default=1000000, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--num_curated_batch', default=3, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--gamma', default=0.001, type=float) # step size for w
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
-    parser.add_argument('--model', default='gpt2-pretrained', choices=['base', 'llama2', 'gpt2-pretrained'])
+    parser.add_argument('--model', default='base', choices=['base', 'llama2', 'gpt2-pretrained'])
     parser.add_argument('--use_pretrained', default='none', type=none_or_str) # 'auto' # 'none', 'gpt-2' or a path to the pretraind model
-    parser.add_argument('--dropout', default=0.0, type=float)
+    parser.add_argument('--dropout', default=0.05, type=float)
     parser.add_argument('--n_head', default=12, type=int)
-    parser.add_argument('--n_layer', default=12, type=int) # depths in att + ff blocks
+    parser.add_argument('--n_layer', default=24, type=int) # depths in att + ff blocks
     parser.add_argument('--n_embd', default=768, type=int) # embedding size / hidden size ... 
     parser.add_argument('--sequence_length', default=512, type=int)
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)

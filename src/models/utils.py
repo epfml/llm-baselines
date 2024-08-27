@@ -4,6 +4,7 @@ from .base import GPTBase, LayerNorm
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    GPT2LMHeadModel,
 )
 
 BLACKLIST_WEIGHT_MODULES = (
@@ -28,8 +29,9 @@ def get_model(args):
 def get_model_and_tokenizer(args):
     """ Return the right model and tokenizer """
     if args.model == 'gpt2-pretrained':
-        tokenizer = AutoTokenizer.from_pretrained("gpt2")
-        model = AutoModelForCausalLM.from_pretrained("gpt2")
+        # model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
+        model = GPTBase(args)
+        tokenizer = AutoTokenizer.from_pretrained('gpt2-medium')
         return model, tokenizer
     else:
         raise KeyError(f"Unknown model '{args.model}'.")

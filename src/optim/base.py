@@ -82,7 +82,8 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
 
              with type_ctx:
                  with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                     outputs = model(x, targets=y)
+                    #  outputs = model(x, targets=y)
+                    outputs = model(x, targets=x) # GPTBase
 
              loss = outputs['loss'] / acc_steps
              loss.backward()

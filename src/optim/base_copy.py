@@ -15,7 +15,7 @@ from .utils import eval, get_batch, save_checkpoint, get_one_batch, eval_gpt2
 from torch import mean
 import pdb
 
-def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, 
+def train_base(model, prompt_tokens, opt, data, gamma, num_curated_tok, num_rand_tok, 
                data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
                eval_freq, ckpt_path, distributed_backend, extra_args, itr=0, rng_state_dict=None):
     
@@ -28,7 +28,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
     substep = itr * acc_steps
 
     ## DATALOADER
-    train_loader, val_loader = get_loader(data, batch_size) 
+    train_loader, val_loader, perm = get_loader(data, batch_size) 
     # each element in a dataloader is a tensor of shape (batch_size, sequence_length)
 
     num_substeps_per_epoch = len(data["train"]) 
@@ -63,16 +63,16 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
         get_batch(data_train_iter, device=extra_args.device)
 
 
-    while itr < iterations:
+    # while itr < iterations:
+    while train_epochs <= extra_args.max_epochs:
         for microstep_idx in range(acc_steps):  # gradient accumulation
              x = get_one_batch(data_train_iter, device=extra_args.device)
-             print(f'x shape: {x.shape}')
-
              with type_ctx:
                  with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                     outputs = model(x, labels=x)
+                    #  outputs = model(x, labels=x)
+                    outputs = model(x, targets=x) # GPTBase
 
-             loss = outputs.loss / acc_steps
+             loss = outputs['loss'] / acc_steps # outputs.loss
              loss.backward()
              substep += 1
              if substep % len(train_loader) == 0:
@@ -89,11 +89,10 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
         itr += 1
 
         # if itr % eval_freq == 0 or itr == iterations: # from here it's only evaluation code, all the training is above
-        if substep % len(train_loader) == 0 or itr % eval_freq == 0 or itr == iterations: # when finish one epoch, do evaluation
+        if substep % len(train_loader) == 0 or itr == iterations: # when finish one epoch, do evaluation
             if distributed_backend.is_master_process():
                 t1 = time.time()
                 dt = t1 - t0
-                epoch = substep//num_substeps_per_epoch
 
                 model.eval()
                 train_loss = loss.detach().cpu().item() * acc_steps
@@ -110,7 +109,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
                     ctx=type_ctx,
                 )
                 
-                print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                print_string = f"{train_epochs}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
@@ -137,8 +136,16 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
                         if text_table is None:
                             text_table = wandb.Table(columns=["itr", "val-pp", "text"])
 
-                        out_str = distributed_backend.get_raw_model(model).generate_from_string(
-                            extra_args.eval_seq_prefix, max_new_tokens=40, temperature=0.9, top_k=None)
+                        # out_str = distributed_backend.get_raw_model(model).generate(
+                        #     extra_args.eval_seq_prefix, max_new_tokens=40, temperature=0.9, top_k=None)
+                        
+                        out_str = distributed_backend.get_raw_model(model).generate(
+                            prompt_tokens,
+                            do_sample=True,
+                            temperature=0.9,
+                            max_length=30,
+                            )
+
                         text_table.add_data(itr, val_perplexity, out_str)
                         # why a copy? see github.com/wandb/wandb/issues/2981
                         wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)})

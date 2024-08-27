@@ -45,7 +45,7 @@ def main(args):
 
     ## MODEL AND TOKENIZER SETUP
     model, tokenizer = get_model_and_tokenizer(args)
-    model = model.to(args.device)
+    model.to(args.device)
     model = distributed_backend.transform_model(model)
     model_paras = model.parameters()
     voab_size = tokenizer.vocab_size
@@ -58,11 +58,16 @@ def main(args):
         raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
     train_seq = token2seq(tokens = train_tokens, max_seq_length = args.sequence_length)
     val_seq = token2seq(tokens = val_tokens, max_seq_length = args.sequence_length)
+    
     # random generate some data added to the training data
-    np.random.seed(args.data_rd_seed)
-    random_tokens = np.random.randint(low=0, high=voab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
-    random_seq = token2seq(tokens = random_tokens, max_seq_length = args.sequence_length)
-    train_seq += random_seq
+    if args.add_random_tokens:
+        np.random.seed(args.data_rd_seed)
+        random_tokens = np.random.randint(low=0, high=voab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
+        random_seq = token2seq(tokens = random_tokens, max_seq_length = args.sequence_length)
+        train_seq += random_seq
+    else:
+        random_seq = []
+
     data = {'train': train_seq, 'val': val_seq}
 
     print(f"Num training seqs: {len(data['train'])}, including {len(random_seq)} random seqs")
@@ -78,10 +83,11 @@ def main(args):
     else:
         opt = torch.optim.SGD(model_paras, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     
+    iterations = args.max_epochs * len(data['train']) // args.batch_size
     if args.scheduler != 'none':
         if args.scheduler in ['cos', 'linear']:
             scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer=opt, max_lr=args.lr, 
-                                                            total_steps=args.iterations, 
+                                                            total_steps=iterations, 
                                                             pct_start=args.warmup_percent, 
                                                             anneal_strategy=args.scheduler, 
                                                             cycle_momentum=False, div_factor=1e2, final_div_factor=.1)
@@ -112,11 +118,12 @@ def main(args):
     ## TRAINING SETUP
     itr = 0
     rng_state_dict = None
+    prompt_tokens = tokenizer(args.eval_seq_prefix, return_tensors="pt").input_ids.to(args.device)
 
     train = train_base
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, 
+    stats = train(model, prompt_tokens, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, 
                   args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, 
                   args.sequence_length, eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
