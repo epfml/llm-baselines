@@ -53,14 +53,14 @@ def main(args):
     ## DATA SETUP
     print(f"Loading dataset '{args.dataset}'")
     if args.dataset == 'shakespeare':
-        train_tokens, val_tokens = get_shakespeare(tokenizer = tokenizer, max_seq_length = args.sequence_length) # data is a dict: {'train': a list of tokenized seqs, 'val': val_tokenized}
+        train_tokens, val_tokens = get_shakespeare(tokenizer = tokenizer) # data is a dict: {'train': a list of tokenized seqs, 'val': val_tokenized}
     else:
         raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
     train_seq = token2seq(tokens = train_tokens, max_seq_length = args.sequence_length)
     val_seq = token2seq(tokens = val_tokens, max_seq_length = args.sequence_length)
     # random generate some data added to the training data
     np.random.seed(args.data_rd_seed)
-    random_tokens = np.random.randint(low=0, high=voab_size, size=(args.num_rand_tok,), dtype=np.uint16)
+    random_tokens = np.random.randint(low=0, high=voab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
     random_seq = token2seq(tokens = random_tokens, max_seq_length = args.sequence_length)
     train_seq += random_seq
     data = {'train': train_seq, 'val': val_seq}

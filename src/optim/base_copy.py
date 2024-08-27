@@ -59,13 +59,14 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
     #     torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
     #     np.random.set_state(rng_state_dict["numpy_rng_state"])
     #     random.setstate(rng_state_dict["py_rng_state"])
-    # for _ in range(substep % num_substeps_per_epoch):
-    #     get_batch(data_train_iter, device=extra_args.device)
+    for _ in range(substep % num_substeps_per_epoch):
+        get_batch(data_train_iter, device=extra_args.device)
 
 
     while itr < iterations:
         for microstep_idx in range(acc_steps):  # gradient accumulation
-             x= get_one_batch(data_train_iter, device=extra_args.device)
+             x = get_one_batch(data_train_iter, device=extra_args.device)
+             print(f'x shape: {x.shape}')
 
              with type_ctx:
                  with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):

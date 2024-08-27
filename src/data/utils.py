@@ -68,7 +68,7 @@ def token2seq(tokens, max_seq_length, seed=0):
     
     return seq
 
-def get_shakespeare(tokenizer, max_seq_length):
+def get_shakespeare(tokenizer):
     char_tknzr = tokenizer.encode
     DATA_PATH = os.path.join(os.getcwd(), "datasets", "shakespeare")
     raw_path = os.path.join(DATA_PATH, "raw.txt")
@@ -89,7 +89,7 @@ def get_shakespeare(tokenizer, max_seq_length):
         with open(raw_path, encoding="utf8") as f:
             text = "".join(f.readlines())
         # encode text
-        tokens = np.array(char_tknzr(text))
+        tokens = np.array(char_tknzr(text), dtype=np.uint16)
         # seqs, shuffled_id = token2seq(x_all, max_seq_length)
         # train = seqs[:int(0.8*len(seqs))]
         # val = seqs[int(0.8*len(seqs)):]
@@ -101,7 +101,14 @@ def get_shakespeare(tokenizer, max_seq_length):
         #     mem[i] = x
         train_tokens = tokens[:int(0.8*len(tokens))]
         val_tokens = tokens[int(0.8*len(tokens)):]
-    print(f'Numer of tokens in Shakespeare: {len(tokens)}, train: {len(train_tokens)}, val: {len(val_tokens)}')
+        # map memory
+        mem = np.memmap(train_path, dtype=np.uint16, mode="w+", shape=train_tokens.shape)
+        mem[:] = train_tokens
+        mem = np.memmap(test_path, dtype=np.uint16, mode="w+", shape=val_tokens.shape)
+        mem[:] = val_tokens
+    train_tokens = np.memmap(train_path, dtype=np.uint16, mode="r")
+    val_tokens = np.memmap(test_path, dtype=np.uint16, mode="r")
+    print(f'Numer of tokens in Shakespeare, train: {len(train_tokens)}, val: {len(val_tokens)}')
 
     return train_tokens, val_tokens
 
@@ -147,7 +154,7 @@ class MyDataset(torch.utils.data.Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        sample = self.data[idx]
+        sample = torch.from_numpy(self.data[idx].astype(np.int64))
         return sample
     
 def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
