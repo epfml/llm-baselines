@@ -30,12 +30,16 @@ def eval(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullcontext
     loss_list_val, acc_list = [], []
 
     for _ in range(max_num_batches): 
-        x, y = get_batch(data_val_iter, device=device)
+        x = get_one_batch(data_val_iter, device=device)
         with ctx:
             outputs = model(x, targets=x, get_logits=True) # targets=y
         val_loss = outputs['loss']
         loss_list_val.append(val_loss)
-        acc_list.append((outputs['logits'].argmax(-1) == y).float().mean())
+        logits = outputs['logits']
+        shift_logits = logits[..., :-1, :].contiguous()
+        predictions = torch.argmax(shift_logits, dim=-1)
+        shift_labels = x[..., 1:].contiguous()
+        acc_list.append((predictions == shift_labels).float().mean())
 
     val_acc = torch.stack(acc_list).mean().item()
     val_loss = torch.stack(loss_list_val).mean().item()

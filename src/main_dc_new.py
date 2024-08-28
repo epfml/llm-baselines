@@ -12,7 +12,7 @@ import wandb
 import config
 from models.utils import get_model
 from data.utils import get_dataset, get_shakespeare, token2seq
-from optim.base import train_base
+from optim.base_dc_new import train_base
 import distributed
 import tiktoken
 

@@ -16,7 +16,7 @@ from .utils import eval, get_batch, save_checkpoint
 from torch import mean
 import pdb
 
-def train_base(model, opt, data, gamma, num_curated_seqs, num_rand_tok, 
+def train_base(model, opt, data, gamma, num_curated_seqs, num_rand_seq, 
                data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
                eval_freq, ckpt_path, distributed_backend, extra_args, itr=0, rng_state_dict=None):
     ## DEVICE and CONTEXT
@@ -38,7 +38,23 @@ def train_base(model, opt, data, gamma, num_curated_seqs, num_rand_tok,
     # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
     data_val_iter = itertools.cycle(data_loader["val"])
 
-    stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
+    if data_loader['curated'] is not None:
+        stats = {"curated_loss": [], "train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
+        print(f'Num clean seq in train: {len(data["train"])}')
+        print(f'Num random seq: {num_rand_seq}')
+        w = torch.ones(len(data["train"]), device=device_type)
+        w_gt = np.zeros(len(data["train"]))
+        w_gt[len(data["train"]) - num_rand_seq:] = 1
+        w_gt = w_gt[data_loader['perm']]
+        w_gt = torch.tensor(w_gt).bool()
+        w_gt_sum = sum(w_gt)
+        w_gap = mean(w[w_gt]) - mean(w[~w_gt]) 
+        w_error = mean((w - w_gt) ** 2)
+        print(f'Initial w_gap: {w_gap}')
+        print(f'Initial w_error: {w_error}')
+        data_cnt = 0
+    else:
+        stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
 
     if extra_args.compile:
         print(f"Compiling model ...")
@@ -52,11 +68,35 @@ def train_base(model, opt, data, gamma, num_curated_seqs, num_rand_tok,
         np.random.set_state(rng_state_dict["numpy_rng_state"])
         random.setstate(rng_state_dict["py_rng_state"])
     for _ in range(substep % num_substeps_per_epoch):
-        get_batch(data_train_iter, device=extra_args.device)
+        get_one_batch(data_train_iter, device=extra_args.device)
 
     while itr < iterations:
+        if data_loader['curated'] is not None:
+            grad0 = {name: torch.zeros_like(param) for name, param in model.named_parameters()}
+            loss0 = 0
+            for _ in data_loader['curated']:
+                x0 = get_one_batch(data_loader['curated'], device=extra_args.device)
+                with type_ctx:
+                    with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=0, gradient_accumulation_steps=acc_steps):
+                        outputs = model(x0, targets=x0)
+                loss0i = outputs['loss']
+                opt.zero_grad(set_to_none=True)
+                loss0i.backward()
+                grad0i = {name: param.grad.clone() for name, param in model.named_parameters()}
+                for name, param in model.named_parameters():
+                    grad0[name] += grad0i[name] / len(data_loader['curated'])
+                loss0 += loss0i.detach().cpu().item() / len(data_loader['curated'])
+            grads_batch = copy.deepcopy(grad0)
+            loss = loss0.clone()
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x = get_one_batch(data_train_iter, device=extra_args.device)
+            if data_loader['curated'] is not None:
+                for i in range(x.size(0)):
+                    if w[data_cnt] > 1e-2:
+                        with type_ctx:
+                            with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+                                outputs = model(x[i], targets=x[i])
+
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
                 #  outputs = model(x, labels=x)

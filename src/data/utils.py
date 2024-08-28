@@ -196,6 +196,6 @@ def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
             batch_size=batch_size,
             shuffle=False,
         )
-        return {'train': train_loader, 'val': val_loader, 'curated': curated_loader, 'perm': perm, 'train_sampler': train_sampler}
     else:
-        return {'train': train_loader, 'val': val_loader, 'perm': perm, 'train_sampler': train_sampler}
+        curated_loader = None
+    return {'train': train_loader, 'val': val_loader, 'curated': curated_loader, 'perm': perm, 'train_sampler': train_sampler}

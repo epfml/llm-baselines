@@ -32,6 +32,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
     # Dataset params
     parser.add_argument('--dataset', default='shakespeare', choices=['slimpajama', 'wikitext', "shakespeare-char", 'shakespeare', 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
+    parser.add_argument('--data_cleaning', action='store_true') # remove some tokens from the training data
     parser.add_argument('--add_random_tokens', action='store_true') # add random tokens to the training data
     parser.add_argument('--train_partial', action='store_true') # use only a fraction of the training data
     parser.add_argument('--num_train_seqs', default=30, type=int) # number of training sequences to use
@@ -42,7 +43,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
     parser.add_argument('--model', default='base', choices=['base', 'llama2', 'gpt2-pretrained'])
-    parser.add_argument('--use_pretrained', default='none', type=none_or_str) # 'auto' # 'none', 'gpt-2' or a path to the pretraind model
+    parser.add_argument('--use_pretrained', action='store_true') # 'auto' # 'none', 'gpt-2' or a path to the pretraind model
     parser.add_argument('--dropout', default=0.05, type=float)
     parser.add_argument('--n_head', default=12, type=int)
     parser.add_argument('--n_layer', default=24, type=int) # depths in att + ff blocks
