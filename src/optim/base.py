@@ -1,5 +1,6 @@
 from contextlib import nullcontext
-from data.utils import get_dataloader
+from data.utils import get_dataloader, get_loader
+from optim.utils import get_one_batch
 
 import torch
 import torch.nn.functional as F
@@ -15,59 +16,42 @@ from .utils import eval, get_batch, save_checkpoint
 from torch import mean
 import pdb
 
-def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok, 
+def train_base(model, opt, data, gamma, num_curated_seqs, num_rand_tok, 
                data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
                eval_freq, ckpt_path, distributed_backend, extra_args, itr=0, rng_state_dict=None):
+    ## DEVICE and CONTEXT
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
         device_type=device_type, dtype=torch.bfloat16)  # extra_args.dtype
     best_val_loss, text_table = float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
     substep = itr * acc_steps
 
-
-    data["train"], train_sampler = get_dataloader(
-        data["train"],
-        sequence_length=sequence_length,
-        batch_size=batch_size,
-        seed=data_seed,
-        distributed_backend=distributed_backend,
-    )
-    
-    data["val"], val_sampler = get_dataloader(
-        data["val"],
-        sequence_length=sequence_length,
-        batch_size=batch_size,
-        seed=data_seed,
-    )
-
-    num_substeps_per_epoch = len(data["train"]) 
+    ## DATALOADER
+    data_loader = get_loader(data, batch_size,
+                            distributed_backend=distributed_backend,
+                            seed=data_seed) 
+    num_substeps_per_epoch = len(data_loader['train']) 
+    train_sampler = data_loader['train_sampler']
     train_epochs = substep//num_substeps_per_epoch # counting the current epoch
-    
     if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
         train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
     if hasattr(train_sampler, "set_epoch"):
         train_sampler.set_epoch(train_epochs)
     else:
         sampler_state_before_iter = train_sampler.generator.get_state()
-    data_train_iter = iter(data["train"])
-
-    print(f'Data train: {len(data["train"])}')
-    print(f'Data eval: {len(data["val"])}')
-
+    data_train_iter = iter(data_loader['train'])
     # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
-    data_val_iter = itertools.cycle(data["val"])
+    data_val_iter = itertools.cycle(data_loader["val"])
 
     stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
 
     if extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
-
     model.train()
-
     t0 = time.time()
     
-    if rng_state_dict is not  None:
+    if rng_state_dict is not None:
         torch.set_rng_state(rng_state_dict["cpu_rng_state"])
         torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
         np.random.set_state(rng_state_dict["numpy_rng_state"])
@@ -75,20 +59,18 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
     for _ in range(substep % num_substeps_per_epoch):
         get_batch(data_train_iter, device=extra_args.device)
 
-
     while itr < iterations:
         for microstep_idx in range(acc_steps):  # gradient accumulation
-             x, y = get_batch(data_train_iter, device=extra_args.device)
-
+             x = get_one_batch(data_train_iter, device=extra_args.device)
              with type_ctx:
                  with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    #  outputs = model(x, targets=y)
+                    #  outputs = model(x, labels=x)
                     outputs = model(x, targets=x) # GPTBase
 
              loss = outputs['loss'] / acc_steps
              loss.backward()
              substep += 1
-             if substep % len(data["train"]) == 0:
+             if substep % len(data_loader["train"]) == 0:
                  train_epochs += 1
                  print(f"Train epoch {train_epochs} done (full pass over training data)")
                  if hasattr(train_sampler, "set_epoch"):
@@ -97,7 +79,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
                      sampler_state_before_iter = None
                  else:
                      sampler_state_before_iter = train_sampler.generator.get_state()
-                 data_train_iter = iter(data["train"])
+                 data_train_iter = iter(data_loader["train"])
        
         if extra_args.grad_clip != 0.0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
@@ -119,7 +101,7 @@ def train_base(model, opt, data, gamma, num_curated_tok, num_rand_tok,
                 current_lr = scheduler.get_last_lr()[0] if scheduler is not None else extra_args.lr
                 
                 eval_steps = (
-                    24 if itr < iterations else len(data["val"])
+                    min(24, len(data_loader["val"])) if itr < iterations else len(data_loader["val"])
                 )
                 val_acc, val_loss, val_perplexity = eval(
                     model,

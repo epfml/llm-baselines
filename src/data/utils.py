@@ -71,6 +71,7 @@ def token2seq(tokens, max_seq_length, seed=0):
     return seq
 
 def get_shakespeare(tokenizer):
+    # return train_tokens, val_tokens, both are np.memmap
     char_tknzr = tokenizer.encode
     DATA_PATH = os.path.join(os.getcwd(), "datasets", "shakespeare")
     raw_path = os.path.join(DATA_PATH, "raw.txt")
@@ -160,22 +161,41 @@ class MyDataset(torch.utils.data.Dataset):
         return sample
     
 def get_loader(dataset, batch_size, distributed_backend=None, seed=0):
-    # dataset is aa dict: {'train': a list of tokens with seq_len, 'val': eval_tokenized}
+    # dataset is a dict: {'train': a list of tokens with seq_len, 'val': eval_tokenized}
     train_dataset = MyDataset(dataset['train']) 
     val_dataset = MyDataset(dataset['val'])
     perm = np.random.RandomState(seed=seed).permutation(len(train_dataset))
     train_dataset = torch.utils.data.Subset(train_dataset, perm)
-
     print(f"dataset size (num seq: num_tokens / seq_len), train : {len(train_dataset)}, val: {len(val_dataset)}")
+
+    if distributed_backend and distributed_backend.get_world_size() > 1:
+        train_sampler = torch.utils.data.DistributedSampler(train_dataset, shuffle=False)
+    else:
+        train_sampler = torch.utils.data.SequentialSampler(train_dataset)
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
+        sampler=train_sampler,
         shuffle=False,
     )
+    if distributed_backend and distributed_backend.get_world_size() > 1:
+        val_sampler = torch.utils.data.DistributedSampler(train_dataset, shuffle=False)
+    else:
+        val_sampler = torch.utils.data.SequentialSampler(val_dataset)
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=batch_size,
+        sampler=val_sampler,
         shuffle=False,
     )
     print(f"num steps (num_tokens / seq_len / num_batch): {len(train_loader)}, val: {len(val_loader)}")
-    return train_loader, val_loader, perm
+    if len(dataset['curated']) > 0:
+        curated_dataset = MyDataset(dataset['curated'])
+        curated_loader = torch.utils.data.DataLoader(
+            curated_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+        )
+        return {'train': train_loader, 'val': val_loader, 'curated': curated_loader, 'perm': perm, 'train_sampler': train_sampler}
+    else:
+        return {'train': train_loader, 'val': val_loader, 'perm': perm, 'train_sampler': train_sampler}

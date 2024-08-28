@@ -15,7 +15,7 @@ from .utils import eval, get_batch, save_checkpoint
 from torch import mean
 import pdb
 
-def train_base_dc(model, opt, data, gamma, num_curated_tok, num_rand_tok, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
+def train_base_dc(model, opt, data, gamma, num_curated_seqs, num_rand_tok, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, 
                eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(

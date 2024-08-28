@@ -29,14 +29,11 @@ def get_args():
 
 
 def main(args): 
-
     ## DEVICE SETUP
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
-
     distributed_backend = distributed.make_backend_from_args(args)
     args = distributed_backend.get_adjusted_args_for_process(args)
-
     args.device = torch.device(args.device)
     device_type = "cuda" if "cuda" in str(args.device) else "cpu"
     if device_type == "cuda":
@@ -48,14 +45,13 @@ def main(args):
     np.random.seed(args.seed)
 
     ## MODEL AND TOKENIZER SETUP
+    tokenizer = tiktoken.get_encoding("gpt2")
+    voab_size = tokenizer.vocab_size
     model = get_model(args).to(args.device) 
     if args.use_pretrained != 'none':
         checkpoint = torch.load("/linx-scratch/yunzhen/pretrained_models/slim_gpt2/ckpt.pt")
         model.load_state_dict(checkpoint['model'])
     model = distributed_backend.transform_model(model)
-    tokenizer = tiktoken.get_encoding("gpt2")
-    voab_size = tokenizer.vocab_size
-    
     group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
     optimized_params_cnt = 0
@@ -72,18 +68,24 @@ def main(args):
     print(f"Loading dataset '{args.dataset}'")
     # data = get_dataset(args) # data is a dict: {'train': train_tokenized, 'val': eval_tokenized}
     if args.dataset == 'shakespeare':
-        train_tokens, val_tokens = get_shakespeare(tokenizer = tokenizer) # data is a dict: {'train': a list of tokenized seqs, 'val': val_tokenized}
+        train_tokens, val_tokens = get_shakespeare(tokenizer = tokenizer) # maps to two arrays of tokens
     else:
         raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
     train_seq = token2seq(tokens = train_tokens, max_seq_length = args.sequence_length)
     val_seq = token2seq(tokens = val_tokens, max_seq_length = args.sequence_length)
-    
+    if args.train_partial == 1:
+        train_seq = train_seq[:args.num_train_seqs]
     # random generate some data added to the training data
-    np.random.seed(args.data_rd_seed)
-    random_data = np.random.randint(low=0, high=voab_size, size=(args.num_rand_tok,), dtype=np.uint16)
-    
-    print(f"Num training tokens: {len(data['train'])}")
-    print(f"Num validation tokens: {len(data['val'])}")
+    if args.add_random_tokens:
+        np.random.seed(args.data_rd_seed)
+        random_tokens = np.random.randint(low=0, high=voab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
+        random_seq = token2seq(tokens = random_tokens, max_seq_length = args.sequence_length)
+        train_seq += random_seq
+    else:
+        random_seq = []
+    data = {'train': train_seq, 'val': val_seq} # data is a dict: {'train': a list of tokenized seqs, 'val': val_tokenized}
+    print(f"Num training seqs: {len(data['train'])}, including {len(random_seq)} random seqs")
+    print(f"Num validation seqs: {len(data['val'])}")
 
 
     ## OPTIMIZER SETUP
@@ -108,7 +110,6 @@ def main(args):
 
     ## LOGGING SETUP
     exp_name = args.exp_name
-
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
@@ -126,6 +127,7 @@ def main(args):
     ## TRAINING
     itr = 0
     args.world_size = distributed_backend.get_world_size()
+    print(f"world_size: {args.world_size}")
     rng_state_dict = None
     # if args.use_pretrained == "auto":
     #     checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
@@ -140,7 +142,7 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, args.num_curated_batch, args.num_rand_tok, 
+    stats = train(model, opt, data, args.gamma, args.num_curated_seqs, args.num_rand_tok, 
                   args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, 
                   args.sequence_length, eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,

@@ -15,6 +15,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--data_seed', default=1337, type=int)
     parser.add_argument('--data_rd_seed', default=4, type=int)
+
+
     parser.add_argument('--device', default='cuda:0', type=str)
     parser.add_argument('--iterations', default=2500, type=int) # 25000
     parser.add_argument('--max_epochs', default=200, type=int) # 25000
@@ -31,9 +33,10 @@ def parse_args(base_parser, args, namespace):
     # Dataset params
     parser.add_argument('--dataset', default='shakespeare', choices=['slimpajama', 'wikitext', "shakespeare-char", 'shakespeare', 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
     parser.add_argument('--add_random_tokens', action='store_true') # add random tokens to the training data
-
+    parser.add_argument('--train_partial', action='store_true') # use only a fraction of the training data
+    parser.add_argument('--num_train_seqs', default=30, type=int) # number of training sequences to use
     parser.add_argument('--num_rand_tok', default=1000000, type=int) # number of curated tokens separated from the training data
-    parser.add_argument('--num_curated_batch', default=3, type=int) # number of curated tokens separated from the training data
+    parser.add_argument('--num_curated_seqs', default=30, type=int) # number of curated tokens separated from the training data
     parser.add_argument('--gamma', default=0.001, type=float) # step size for w
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
