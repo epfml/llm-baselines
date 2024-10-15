@@ -15,6 +15,8 @@ import distributed
 from data.utils import get_dataset
 from models.utils import get_model
 from optim.base import train_base
+from optim.muon import Muon, zeropower_backends
+from optim.soap import SOAP
 
 
 def get_args():
@@ -92,9 +94,38 @@ def main(args):
             weight_decay=args.weight_decay,
             **extra_args,
         )
+    elif args.opt == "soap":
+        opt = SOAP(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            shampoo_beta=args.shampoo_beta,
+            weight_decay=args.weight_decay,
+            precondition_frequency=args.precondition_frequency,
+            max_precond_dim=args.max_precond_dim,
+            merge_dims=args.merge_dims,
+            precondition_1d=args.precondition_1d,
+            normalize_grads=args.normalize_grads,
+            data_format=args.soap_data_format,
+            correct_bias=args.correct_bias,
+        )
+    elif args.opt == "muon":
+        opt = Muon(
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
+            nesterov=args.nesterov,
+            backend=args.muon_backend,
+            backend_steps=args.muon_backend_steps,
+            # rank=args.rank,
+            # world_size=args.world_size,
+        )  # i have left rank and world_size inside Muon
     else:
         opt = torch.optim.SGD(
-            group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
         )
 
     if args.scheduler != "none":

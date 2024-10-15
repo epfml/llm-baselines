@@ -4,13 +4,12 @@ from itertools import chain
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
 
 # Parts of the code are modifications of Pytorch's AdamW optimizer
 # Parts of the code are modifications of code from https://github.com/jiaweizzhao/GaLore/blob/master/galore_torch/galore_projector.py
 
 
-class SOAP(optim.Optimizer):
+class SOAP(torch.optim.Optimizer):
     """
     Implements SOAP algorithm (https://arxiv.org/abs/2409.11321).
 
