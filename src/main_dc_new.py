@@ -12,10 +12,9 @@ import wandb
 import config
 from models.utils import get_model
 from data.utils import get_dataset, get_shakespeare, token2seq
-from optim.base import train_base
+from optim.base_dc_new import train_base
 import distributed
 import tiktoken
-from transformers import GPT2Tokenizer
 
 import pdb
 
@@ -46,9 +45,8 @@ def main(args):
     np.random.seed(args.seed)
 
     ## MODEL AND TOKENIZER SETUP
-    tokenizer = tiktoken.get_encoding("gpt2") 
-    vocab_size = tokenizer.n_vocab # tokenizer.vocab_size
-    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    tokenizer = tiktoken.get_encoding("gpt2")
+    voab_size = tokenizer.vocab_size
     model = get_model(args).to(args.device) 
     if args.use_pretrained != 'none':
         checkpoint = torch.load("/linx-scratch/yunzhen/pretrained_models/slim_gpt2/ckpt.pt")
@@ -75,17 +73,16 @@ def main(args):
         raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
     train_seq = token2seq(tokens = train_tokens, max_seq_length = args.sequence_length)
     val_seq = token2seq(tokens = val_tokens, max_seq_length = args.sequence_length)
-    if args.train_partial == 1:
-        train_seq = train_seq[:args.num_train_seqs]
+    if args.train_partial:
+        train_seq = train_seq[:args.num_curated_seqs]
     # random generate some data added to the training data
     if args.add_random_tokens:
         np.random.seed(args.data_rd_seed)
-        random_tokens = np.random.randint(low=0, high=vocab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
+        random_tokens = np.random.randint(low=0, high=voab_size-1, size=(args.num_rand_tok,), dtype=np.uint16)
         random_seq = token2seq(tokens = random_tokens, max_seq_length = args.sequence_length)
         train_seq += random_seq
     else:
         random_seq = []
-    num_rand_seqs = len(random_seq)
     if args.data_cleaning:
         print("Data cleaning.")
         curated_seq = train_seq[:args.num_curated_seqs]
@@ -153,7 +150,7 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
-    stats = train(model, opt, data, args.gamma, args.num_curated_seqs, num_rand_seqs, 
+    stats = train(model, opt, data, args.gamma, args.num_curated_seqs, args.num_rand_tok, 
                   args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, 
                   args.sequence_length, eval_freq=args.eval_freq, 
                   distributed_backend=distributed_backend,
