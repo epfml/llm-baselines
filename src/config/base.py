@@ -1,3 +1,5 @@
+from typing import Optional
+
 import distributed
 import torch
 
@@ -24,7 +26,9 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--beta2", default=0.95, type=float)
     parser.add_argument("--scheduler", default="cos", choices=["linear", "cos", "none"])
     parser.add_argument(
-        "--opt", default="adamw", choices=["adamw", "sgd", "muon", "soap"]
+        "--opt",
+        default="adamw",
+        choices=["adamw", "sgd", "muon", "soap", "ademamix", "lion"],
     )
     parser.add_argument("--eval_freq", default=200, type=int)  # in iterations
     parser.add_argument("--results_base_folder", default="./exps", type=str)
@@ -43,6 +47,10 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--nesterov", default=True, type=bool)
     parser.add_argument("--muon_backend", default="newtonschulz5", type=str)
     parser.add_argument("--muon_backend_steps", default=5, type=int)
+    parser.add_argument("--adema_beta3", default=0.9, type=float)
+    parser.add_argument("--adema_alpha", default=2.0, type=float)
+    parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int])
+    parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int])
     # Dataset params
     parser.add_argument(
         "--dataset",

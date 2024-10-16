@@ -14,7 +14,9 @@ import config
 import distributed
 from data.utils import get_dataset
 from models.utils import get_model
+from optim.ademamix import AdEMAMix
 from optim.base import train_base
+from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
 from optim.soap import SOAP
 
@@ -120,6 +122,23 @@ def main(args):
             # rank=args.rank,
             # world_size=args.world_size,
         )  # i have left rank and world_size inside Muon
+    elif args.opt == "ademamix":
+        opt = AdEMAMix(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2, args.adema_beta3),
+            alpha=args.adema_alpha,
+            beta3_warmup=args.adema_beta3_warmup,
+            alpha_warmup=args.adema_alpha_warmup,
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt == "lion":
+        opt = Lion(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+        )
     else:
         opt = torch.optim.SGD(
             group_specs,
