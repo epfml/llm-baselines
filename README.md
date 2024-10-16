@@ -60,7 +60,7 @@ parser.add_argument("--correct_bias", default=True, type=bool)
 parser.add_argument("--nesterov", default=True, type=bool) # whether to use Nesterov-style momentum 
 parser.add_argument("--muon_backend", default="newtonschulz5", type=str) # the chosen backend for the orthogonalization step
 parser.add_argument("--muon_backend_steps", default=5, type=int) # the number of iteration steps to use in the muon_backend, if it is iterative
-parser.add_argmunet("--adema_beta3", default=0.9, type=float) # beta2 in AdEMAMix
+parser.add_argmunet("--adema_beta3", default=0.9, type=float) # beta3 in AdEMAMix
 parser.add_argument("--adema_alpha", default=2.0, type=float) # alpha in AdEMAMix
 parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int])
 parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int])
