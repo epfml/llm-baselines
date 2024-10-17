@@ -49,8 +49,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--muon_backend_steps", default=5, type=int)
     parser.add_argument("--adema_beta3", default=0.9, type=float)
     parser.add_argument("--adema_alpha", default=2.0, type=float)
-    parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int])
-    parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int])
+    parser.add_argument("--adema_beta3_warmup", default=None, type=int)
+    parser.add_argument("--adema_alpha_warmup", default=None, type=int)
     # Dataset params
     parser.add_argument(
         "--dataset",
