@@ -39,12 +39,16 @@ parser.add_argument('--data_seed', default=1337, type=int) # random seed definin
 parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
 parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
 parser.add_argument("--warmup_steps", default=300, type=int) # it was only warmup_percent before
-parser.add_argument('--lr', default=1e-3, type=float) 
+parser.add_argument('--lr', default=1e-3, type=float)
+parser.add_argument("--wsd_final_lr_scale", default=0.0, type=float) # wsd scheduler
+parser.add_argument("--wsd_fract_decay", default=0.1, type=float) # wsd scheduler 
+parser.add_argument("--decay_type", default="linear", choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"])
 parser.add_argument('--warmup_percent', default=0.05, type=float) # the total number of warmup_steps is iterations * warmup_percent
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
+parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
+parser.add_argument("--cos_inf_steps", default=0, type=int) # cos_inf scheduler
 parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'lion', 'sf-adamw', 'sf-sgd'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved

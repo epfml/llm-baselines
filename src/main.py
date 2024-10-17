@@ -13,7 +13,7 @@ import wandb
 import config
 import distributed
 from data.utils import get_dataset
-from models.utils import get_model
+from models.utils import cos_inf_schedule, get_model, wsd_schedule
 from optim.ademamix import AdEMAMix
 from optim.base import train_base
 from optim.lion import Lion
@@ -186,8 +186,27 @@ def main(args):
                 anneal_strategy=args.scheduler,
                 cycle_momentum=False,
                 div_factor=1e2,
-                final_div_factor=1,
+                final_div_factor=0.1,
             )
+        elif args.scheduler == "cos_inf":
+            lambda_schedule = cos_inf_schedule(
+                n_iterations=args.iterations,
+                n_warmup=args.warmup_steps,
+                n_inf=args.cos_inf_steps,
+                div_factor=1e2,
+                final_div_factor=0.1,
+            )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+        elif args.scheduler == "wsd":
+            lambda_schedule = wsd_schedule(
+                n_iterations=args.iterations,
+                n_warmup=args.warmup_steps,
+                fract_decay=args.wsd_fract_decay,
+                init_div_factor=1e2,
+                final_lr_factor=args.wsd_final_lr_scale,  # should be 0 here
+                decay_type=args.decay_type,
+            )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
         else:
             raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")
     else:
