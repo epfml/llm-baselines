@@ -8,18 +8,19 @@ import sys
 
 import numpy as np
 import torch
-import wandb
 
 import config
 import distributed
+import wandb
 from data.utils import get_dataset
-from models.utils import cos_inf_schedule, get_model, wsd_schedule
+from models.utils import get_model
 from optim.ademamix import AdEMAMix
 from optim.base import train_base
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.soap import SOAP
+from optim.utils import cos_inf_schedule, wsd_schedule
 
 
 def get_args():
@@ -217,7 +218,12 @@ def main(args):
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy["device"]
-        wandb.init(project=args.wandb_project, name=exp_name, config=params_copy, entity=args.wandb_entity)
+        wandb.init(
+            project=args.wandb_project,
+            name=exp_name,
+            config=params_copy,
+            entity=args.wandb_entity,
+        )
 
     ckpt_path = os.path.join(
         args.results_base_folder, args.dataset, args.model, exp_name
