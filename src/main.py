@@ -18,7 +18,7 @@ from optim.ademamix import AdEMAMix
 from optim.base import train_base
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
-from optim.schedulefree import AdamWScheduleFree
+from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.soap import SOAP
 
 
@@ -145,6 +145,16 @@ def main(args):
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            warmup_steps=args.warmup_steps,
+            r=args.schedulefree_r,
+            weight_lr_power=args.weight_lr_power,
+        )  # without foreach argument
+    elif args.opt == "sf-sgd":
+        opt = SGDScheduleFree(
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
             weight_decay=args.weight_decay,
             warmup_steps=args.warmup_steps,
             r=args.schedulefree_r,

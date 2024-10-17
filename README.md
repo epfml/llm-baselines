@@ -45,7 +45,7 @@ parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'lion', 'sf-adamw'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'lion', 'sf-adamw', 'sf-sgd'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
@@ -63,8 +63,8 @@ parser.add_argument("--muon_backend", default="newtonschulz5", type=str) # the c
 parser.add_argument("--muon_backend_steps", default=5, type=int) # the number of iteration steps to use in the muon_backend, if it is iterative
 parser.add_argmunet("--adema_beta3", default=0.9, type=float) # beta3 in AdEMAMix
 parser.add_argument("--adema_alpha", default=2.0, type=float) # alpha in AdEMAMix
-parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int])
-parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int])
+parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
+parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
 parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulfree hyperparameter
 parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulfree hyperparameter
 # Dataset params
@@ -130,6 +130,7 @@ src/
     optim/
         utils.py    # contains eval and get_batch functions
         base.py     # training function for the base and llama models
+        ...
     distributed/
         # code to enable simple distributed training
 ```
