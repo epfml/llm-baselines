@@ -65,8 +65,8 @@ parser.add_argmunet("--adema_beta3", default=0.9, type=float) # beta3 in AdEMAMi
 parser.add_argument("--adema_alpha", default=2.0, type=float) # alpha in AdEMAMix
 parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
 parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
-parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulfree hyperparameter
-parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulfree hyperparameter
+parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulefree hyperparameter
+parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulefree hyperparameter
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
 parser.add_argument('--vocab_size', default=50304, type=int)
