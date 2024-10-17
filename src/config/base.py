@@ -19,8 +19,9 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--data_seed", default=1337, type=int)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--iterations", default=25000, type=int)
+    parser.add_argument("--warmup_steps", default=300, type=int) # it was only warmup_percent before
     parser.add_argument("--lr", default=1e-3, type=float)
-    parser.add_argument("--warmup_percent", default=0.05, type=float)
+    parser.add_argument("--warmup_percent", default=0.05, type=float) # leave it anyway, warmup_steps / iterations
     parser.add_argument("--weight_decay", default=0.1, type=float)
     parser.add_argument("--beta1", default=0.9, type=float)
     parser.add_argument("--beta2", default=0.95, type=float)
@@ -28,7 +29,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument(
         "--opt",
         default="adamw",
-        choices=["adamw", "sgd", "muon", "soap", "ademamix", "lion"],
+        choices=["adamw", "sgd", "muon", "soap", "ademamix", "lion", "sf-adamw"],
     )
     parser.add_argument("--eval_freq", default=200, type=int)  # in iterations
     parser.add_argument("--results_base_folder", default="./exps", type=str)
@@ -51,6 +52,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--adema_alpha", default=2.0, type=float)
     parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int])
     parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int])
+    parser.add_argument("--schedulefree_r", default=0.0, type=float)
+    parser.add_argument("--weight_lr_power", default=2.0, type=float)
     # Dataset params
     parser.add_argument(
         "--dataset",

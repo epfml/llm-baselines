@@ -18,6 +18,7 @@ from optim.ademamix import AdEMAMix
 from optim.base import train_base
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
+from optim.schedulefree import AdamWScheduleFree
 from optim.soap import SOAP
 
 
@@ -139,6 +140,16 @@ def main(args):
             betas=(args.beta1, args.beta2),
             weight_decay=args.weight_decay,
         )
+    elif args.opt == "sf-adamw":
+        opt = AdamWScheduleFree(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            warmup_steps=args.warmup_steps,
+            r=args.schedulefree_r,
+            weight_lr_power=args.weight_lr_power,
+        )  # without foreach argument
     else:
         opt = torch.optim.SGD(
             group_specs,
@@ -148,12 +159,20 @@ def main(args):
         )
 
     if args.scheduler != "none":
+        assert (
+            args.warmup_steps < args.iterations
+        ), "Warmup steps must be < iterations."  # from schedules-and-scaling
         if args.scheduler in ["cos", "linear"]:
+            # initial lr is args.lr / div_factor
+            # final lr is initial_lr/final_div_factor = args.lr / div_factor / final_div_factor
             scheduler = torch.optim.lr_scheduler.OneCycleLR(
                 optimizer=opt,
-                max_lr=args.lr,
+                max_lr=[
+                    group.get("lr", args.lr) for group in group_specs
+                ],  # it was args.lr
                 total_steps=args.iterations,
-                pct_start=args.warmup_percent,
+                pct_start=args.warmup_steps
+                / args.iterations,  # it was args.warmup_percent
                 anneal_strategy=args.scheduler,
                 cycle_momentum=False,
                 div_factor=1e2,
