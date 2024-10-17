@@ -80,6 +80,8 @@ def train_base(
         print(f"Compiling model ...")
         model = torch.compile(model)  # requires pytorch 2.0+
 
+    grad_norms = []
+
     model.train()
 
     t0 = time.time()
@@ -120,7 +122,8 @@ def train_base(
                 data_train_iter = iter(data["train"])
 
         if extra_args.grad_clip != 0.0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), extra_args.grad_clip)
+            grad_norms.append(grad_norm)
         opt.step()
         scheduler.step()
         opt.zero_grad(set_to_none=True)
@@ -162,6 +165,8 @@ def train_base(
                     logs = {
                         "iter": itr,
                         "train/loss": train_loss,
+                        "train/max_grad_norm": max(grad_norms).item() if grad_norms else 0,
+                        "train/mean_grad_norm": torch.tensor(grad_norms).mean().item() if grad_norms else 0,
                         "val/loss": val_loss,
                         "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
