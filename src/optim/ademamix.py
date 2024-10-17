@@ -1,4 +1,7 @@
-"""Here is an original implementation of AdEMAMix. Source: https://github.com/apple/ml-ademamix"""
+"""
+Here is an original implementation of AdEMAMix. 
+Source: https://github.com/apple/ml-ademamix
+"""
 
 import math
 
