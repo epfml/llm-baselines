@@ -1,4 +1,7 @@
-"""Here is an original implementation of SOAP. Source: https://github.com/nikhilvyas/SOAP"""
+"""
+Here is an original implementation of SOAP. 
+Source: https://github.com/nikhilvyas/SOAP
+"""
 
 from itertools import chain
 

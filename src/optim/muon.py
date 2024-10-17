@@ -1,4 +1,7 @@
-"""Here is an original implementation of MUON. Source: https://github.com/KellerJordan/modded-nanogpt"""
+"""
+Here is an original implementation of Muon. 
+Source: https://github.com/KellerJordan/modded-nanogpt
+"""
 
 import torch
 import torch.distributed as dist
