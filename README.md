@@ -67,8 +67,8 @@ parser.add_argument("--muon_backend", default="newtonschulz5", type=str) # the c
 parser.add_argument("--muon_backend_steps", default=5, type=int) # the number of iteration steps to use in the muon_backend, if it is iterative
 parser.add_argmunet("--adema_beta3", default=0.9, type=float) # beta3 in AdEMAMix
 parser.add_argument("--adema_alpha", default=2.0, type=float) # alpha in AdEMAMix
-parser.add_argument("--adema_beta3_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
-parser.add_argument("--adema_alpha_warmup", default=None, type=Optional[int]) # AdEMAMix hyperparameter
+parser.add_argument("--adema_beta3_warmup", default=None, type=int) # AdEMAMix hyperparameter
+parser.add_argument("--adema_alpha_warmup", default=None, type=int) # AdEMAMix hyperparameter
 parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulefree hyperparameter
 parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulefree hyperparameter
 # Dataset params
