@@ -1,4 +1,5 @@
 from contextlib import ExitStack, contextmanager, nullcontext
+import itertools
 
 import numpy as np
 import torch
@@ -18,8 +19,11 @@ def get_batch(dataloader, device="cpu"):
 
 
 @torch.no_grad()
-def eval(model, data_val_iter, device="cpu", max_num_batches=24, ctx=nullcontext()):
+def eval(model, data_val_iter, device="cpu", max_num_batches=24, ctx=nullcontext(), reset_iterator=False):
     assert model.training == False
+
+    if reset_iterator: # ensure that we always eval on the same batches
+        data_val_iter = itertools.cycle(data_val_iter)
 
     loss_list_val, acc_list = [], []
 

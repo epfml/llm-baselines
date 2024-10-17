@@ -186,7 +186,7 @@ def main(args):
                 anneal_strategy=args.scheduler,
                 cycle_momentum=False,
                 div_factor=1e2,
-                final_div_factor=0.1,
+                final_div_factor=1,
             )
         else:
             raise NotImplementedError(f"Unknown scheduler type: {args.scheduler}.")

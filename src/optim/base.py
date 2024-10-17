@@ -149,6 +149,7 @@ def train_base(
                     extra_args.device,
                     max_num_batches=eval_steps,
                     ctx=type_ctx,
+                    reset_iterator=True,
                 )
 
                 print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
