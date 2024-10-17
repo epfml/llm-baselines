@@ -207,6 +207,8 @@ def train_base(
                             {f"generated-text-{wandb.run.name}": copy.copy(text_table)}
                         )
 
+                grad_norms = []
+
                 model.train()
                 t0 = time.time()
         if distributed_backend.is_master_process():
