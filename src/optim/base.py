@@ -127,8 +127,11 @@ def train_base(
                 model.parameters(), extra_args.grad_clip
             )
             grad_norms.append(grad_norm)
+        if extra_args.opt == "sf-sgd" or extra_args.opt == "sf-adamw":
+            opt.train()
         opt.step()
-        scheduler.step()
+        if extra_args.scheduler != "none":
+            scheduler.step()
         opt.zero_grad(set_to_none=True)
         itr += 1
 
@@ -141,6 +144,8 @@ def train_base(
                 epoch = substep // num_substeps_per_epoch
 
                 model.eval()
+                if extra_args.opt == "sf-sgd" or extra_args.opt == "sf-adamw":
+                    opt.eval()
                 train_loss = loss.detach().cpu().item() * acc_steps
                 current_lr = (
                     scheduler.get_last_lr()[0]
