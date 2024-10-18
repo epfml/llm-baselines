@@ -20,6 +20,7 @@ import tiktoken
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
 from models.base import CausalSelfAttention, GPTBase
 
 
@@ -184,7 +185,6 @@ class Llama(GPTBase):
                 torch.nn.init.normal_(
                     p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
                 )
-
 
     def get_num_params(self, non_embedding=True):
         """

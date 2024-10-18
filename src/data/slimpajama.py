@@ -1,9 +1,9 @@
-from tqdm import tqdm
+import os
+
 import numpy as np
 import tiktoken
 from datasets import load_dataset
-import os
-
+from tqdm import tqdm
 
 SPJ_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/slimpajama6B/")
 SPJ_CHUNK_1_DATA_PATH = os.path.join(SPJ_DATA_PATH, "chunk1")
