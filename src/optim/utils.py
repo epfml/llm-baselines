@@ -162,7 +162,7 @@ def save_checkpoint(
         {
             "model": distributed_backend.get_raw_model(model).state_dict(),
             "optimizer": opt.state_dict(),
-            "scheduler": scheduler.state_dict(),
+            "scheduler": scheduler.state_dict() if scheduler is not None else None,
             "itr": itr,
         },
         **extra_args,
