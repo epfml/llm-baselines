@@ -70,6 +70,8 @@ parser.add_argument("--adema_beta3_warmup", default=None, type=int) # AdEMAMix h
 parser.add_argument("--adema_alpha_warmup", default=None, type=int) # AdEMAMix hyperparameter
 parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulefree hyperparameter
 parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulefree hyperparameter
+parser.add_argument("--model_sharding", default=None, type=bool) # Adam-mini
+parser.add_argument("--adam_mini_verbose", default=False, type=bool) # print all the logs if true
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
 parser.add_argument('--vocab_size', default=50304, type=int)
@@ -87,6 +89,7 @@ parser.add_argument('--bias', default=False, type=bool)
 parser.add_argument('--compile', action='store_true') # if true then model is compiled 
 parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
 parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
+parser.add_argument('--n_kv_head', default=None, type=Optional[int])
 # logging params (WandB)
 parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
 parser.add_argument('--wandb_project', default="my-project", type=str)

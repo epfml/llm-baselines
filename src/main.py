@@ -14,6 +14,7 @@ import distributed
 import wandb
 from data.utils import get_dataset
 from models.utils import get_model
+from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.base import train_base
 from optim.lion import Lion
@@ -85,6 +86,7 @@ def main(args):
         g["params"] = params
         optimized_params_cnt += sum([p.numel() for p in g["params"]])
     print("number of optimized parameters: %.2fM" % (optimized_params_cnt / 1e6,))
+    args.world_size = distributed_backend.get_world_size()
     if args.opt == "adamw":
         use_fused = (device_type == "cuda") and (
             "fused" in inspect.signature(torch.optim.AdamW).parameters
@@ -161,6 +163,20 @@ def main(args):
             r=args.schedulefree_r,
             weight_lr_power=args.weight_lr_power,
         )  # without foreach argument
+    elif args.opt == "adam-mini":
+        opt = Adam_mini(
+            device=args.device,
+            world_size=args.world_size,
+            named_parameters=model.named_parameters(),  # check
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            model_sharding=args.model_sharding,
+            dim=args.n_embd,
+            n_heads=args.n_head,
+            n_kv_heads=args.n_kv_head,
+            verbose=args.adam_mini_verbose,
+        )
     else:
         opt = torch.optim.SGD(
             group_specs,
@@ -213,7 +229,7 @@ def main(args):
     else:
         scheduler = None
 
-    args.world_size = distributed_backend.get_world_size()
+    # args.world_size = distributed_backend.get_world_size()
     exp_name = args.exp_name
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
