@@ -142,10 +142,10 @@ def train(
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             grad_norms.append(grad_norm)
 
-        if extra_args.opt == "sf-sgd" or extra_args.opt == "sf-adamw":
+        if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
         opt.step()
-        if extra_args.scheduler != "none":
+        if cfg.scheduler != "none":
             scheduler.step()
         opt.zero_grad(set_to_none=True)
         dt = (time.perf_counter_ns() - t_start) / 1e9
