@@ -47,9 +47,9 @@ def parse_args(base_parser, args, namespace):
         "--eval_seq_prefix", default="none", type=str
     )  # prefix used to generate sequences
     parser.add_argument("--log_dynamics", action="store_true")
-    parser.add_argument(
-        "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
-    )
+    # parser.add_argument(
+    #     "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
+    # )
     parser.add_argument("--wandb_entity", default=None, type=none_or_str)
 
     # Schedule
