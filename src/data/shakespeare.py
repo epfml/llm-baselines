@@ -4,6 +4,7 @@ from string import ascii_letters, digits, punctuation
 import numpy as np
 import requests
 
+
 _char_decode = dict(
     enumerate(sorted(set(ascii_letters + digits + punctuation + " \n")))
 )
@@ -14,11 +15,9 @@ def char_tknzr(txt: str):
     return [_char_encode[char] for char in txt if char in _char_encode]
 
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets", "shakespeare")
-
-
-def get_shakespeare_data():
+def get_shakespeare_data(datasets_dir):
     """Inspired from https://github.com/karpathy/nanoGPT/"""
+    DATA_PATH = os.path.join(datasets_dir, "shakespeare")
     raw_path = os.path.join(DATA_PATH, "raw.txt")
     train_path = os.path.join(DATA_PATH, f"train.npy")
     test_path = os.path.join(DATA_PATH, f"test.npy")
@@ -48,8 +47,7 @@ def get_shakespeare_data():
         mem = np.memmap(test_path, dtype=np.uint16, mode="w+", shape=x_test.shape)
         mem[:] = x_test
 
-    # at this point we know that the binfile was properly created so we load it
     return {
-        "train": np.memmap(train_path, dtype=np.uint16, mode="r"),
-        "val": np.memmap(test_path, dtype=np.uint16, mode="r"),
+        "train": train_path,
+        "val": test_path,
     }

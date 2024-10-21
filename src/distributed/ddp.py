@@ -1,10 +1,9 @@
-import math
 import os
+import math
 from contextlib import contextmanager
 
-from torch.distributed import (barrier, destroy_process_group, get_world_size,
-                               init_process_group)
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group, get_world_size
 
 from .backend import DistributedBackend
 
@@ -21,12 +20,6 @@ class DataParallelDistributedBackend(DistributedBackend):
     def get_adjusted_args_for_process(self, args):
         effective_batch_size = args.batch_size * args.acc_steps
         world_size = self.get_world_size()
-        if args.acc_steps % world_size != 0:
-            raise ValueError(
-                f"Number of accumulation steps "
-                "{args.acc_steps} is not divisible "
-                "by the world size {world_size}."
-            )
         if effective_batch_size % world_size != 0:
             raise ValueError(
                 f"Effective batch size "
@@ -38,6 +31,7 @@ class DataParallelDistributedBackend(DistributedBackend):
         args.batch_size = args.batch_size // (world_size // acc_steps_div)
         args.device = f"cuda:{self.local_rank}"
         args.seed = args.seed + self.local_rank
+        args.data_seed = args.data_seed
         return args
 
     def transform_model(self, model):
@@ -66,6 +60,3 @@ class DataParallelDistributedBackend(DistributedBackend):
 
     def finalize(self):
         destroy_process_group()
-
-    def sync(self):
-        barrier()

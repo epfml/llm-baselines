@@ -59,18 +59,15 @@ def apply_rotary_emb(q, k, freqs_cis):
     return q_out, k_out
 
 
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
+class RMSNorm2(nn.Module):
+    def __init__(self, ndim, eps=1e-5, bias=False):
         super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
 
-    def _norm(self, x):
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x):
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, self.eps)
 
 
 class LlamaMLP(nn.Module):
@@ -78,17 +75,12 @@ class LlamaMLP(nn.Module):
         super().__init__()
 
         hidden_dim = config.n_embd * 4
-        hidden_dim = int(2 * hidden_dim / 3)
-        hidden_dim = config.multiple_of * (
-            (hidden_dim + config.multiple_of - 1) // config.multiple_of
-        )
 
         self.w1 = nn.Linear(config.n_embd, hidden_dim, bias=False)
-        self.w2 = nn.Linear(config.n_embd, hidden_dim, bias=False)
         self.c_proj = nn.Linear(hidden_dim, config.n_embd, bias=False)
 
     def forward(self, x):
-        return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x))
+        return self.c_proj(nn.functional.gelu(self.w1(x)))
 
 
 class LlamaAttention(CausalSelfAttention):
@@ -138,9 +130,9 @@ class LlamaAttention(CausalSelfAttention):
 class LlamaBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_1 = RMSNorm2(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
-        self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_2 = RMSNorm2(config.n_embd, eps=config.rmsnorm_eps)
         self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
@@ -150,7 +142,7 @@ class LlamaBlock(nn.Module):
         return x
 
 
-class Llama(GPTBase):
+class Test(GPTBase):
     def __init__(self, config):
         super().__init__(config)
         assert config.vocab_size is not None
@@ -167,7 +159,7 @@ class Llama(GPTBase):
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
-                ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
+                ln_f=RMSNorm2(config.n_embd, eps=config.rmsnorm_eps),
             )
         )
 
@@ -210,8 +202,9 @@ class Llama(GPTBase):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
+        # pos_emb = self.transformer.wpe(pos)
 
-        x = self.transformer.drop(tok_emb)
+        x = self.transformer.drop(tok_emb) # + pos_emb)
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
         for block in self.transformer.h:

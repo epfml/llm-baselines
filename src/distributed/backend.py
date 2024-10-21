@@ -31,6 +31,3 @@ class DistributedBackend(object):
 
     def finalize(self):
         pass
-
-    def sync(self):
-        pass

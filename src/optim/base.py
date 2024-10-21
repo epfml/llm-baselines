@@ -1,254 +1,264 @@
-import copy
-import itertools
-import os
-import random
-import time
 from contextlib import nullcontext
+import copy
+from pathlib import Path
+import time
+import yaml
 
-import numpy as np
 import torch
-import torch.nn.functional as F
-
 import wandb
-from data.utils import get_dataloader
 
-from .utils import eval, get_batch, save_checkpoint
+# from logger.logger import DynamicsLogger
+from .utils import (
+    eval,
+    get_batch,
+    load_checkpoint,
+    load_worker_state,
+    save_checkpoint,
+    save_worker_state,
+)
 
 
-def train_base(
+def train(
     model,
     opt,
-    data,
-    data_seed,
+    datareaders,
     scheduler,
-    iterations,
-    acc_steps,
-    batch_size,
-    sequence_length,
-    eval_freq,
-    ckpt_path,
+    exp_dir,
     distributed_backend,
-    extra_args,
-    itr=0,
-    rng_state_dict=None,
+    cfg,
 ):
-    device_type = "cuda" if "cuda" in str(extra_args.device) else "cpu"
-    type_ctx = (
-        nullcontext()
-        if device_type == "cpu"
-        else torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
-    )  # extra_args.dtype)
-    best_val_loss, text_table = (
-        float("inf"),
-        None,
-    )  # best_val_loss not used atm, early stopping not recommended but possible
-    substep = itr * acc_steps
-    data["train"], train_sampler = get_dataloader(
-        data["train"],
-        sequence_length=sequence_length,
-        batch_size=batch_size,
-        seed=data_seed,
-        distributed_backend=distributed_backend,
-    )
-
-    data["val"], val_sampler = get_dataloader(
-        data["val"],
-        sequence_length=sequence_length,
-        batch_size=batch_size,
-        seed=data_seed,
-    )
-
-    num_substeps_per_epoch = len(data["train"])
-    train_epochs = substep // num_substeps_per_epoch
-
-    if (
-        rng_state_dict is not None
-        and rng_state_dict.get("train_sampler_state", None) is not None
-    ):
-        train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
-    if hasattr(train_sampler, "set_epoch"):
-        train_sampler.set_epoch(train_epochs)
-    else:
-        sampler_state_before_iter = train_sampler.generator.get_state()
-    data_train_iter = iter(data["train"])
-
-    # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
-    data_val_iter = itertools.cycle(data["val"])
-
-    stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
-
-    if extra_args.compile:
+    not_compiled_model = model
+    if cfg.compile:
         print(f"Compiling model ...")
-        model = torch.compile(model)  # requires pytorch 2.0+
+        model = torch.compile(model)
 
+    if "cuda" in cfg.device:
+        type_ctx = torch.amp.autocast(
+            device_type="cuda",
+            dtype={
+                "float32": torch.float32,
+                "float16": torch.float16,
+                "bfloat16": torch.bfloat16,
+            }[cfg.dtype],
+        )
+    else:
+        type_ctx = nullcontext()
+
+    if cfg.resume_from:
+        # This is a full resume including the model weights, optimizer, state
+        # dataloader state, random seed, etc. Not indended for fine tuning or
+        # other scenarios where some of these should change.
+        print(f"\nResuming Training From {cfg.resume_from}")
+        ckpt_dir = Path(cfg.resume_from)
+        curr_iter = load_checkpoint(
+            model,
+            opt,
+            scheduler,
+            ckpt_dir / "main.pt",
+            cfg.device,
+        )
+        load_worker_state(ckpt_dir)
+    else:
+        curr_iter = 0
+
+    # if distributed_backend.is_master_process() and cfg.log_dynamics:
+    #     with open(cfg.dynamics_logger_cfg, "r") as f:
+    #         dlcfg = yaml.safe_load(f)
+
+    #     # Hooks into optimizer
+    #     dlogger = DynamicsLogger(
+    #         model, opt, dlcfg, cfg.results_base_folder, wandb=cfg.wandb
+    #     )
+    #     dlogger.iteration = curr_iter
+
+    substep = curr_iter * cfg.acc_steps
+    train_reader, val_reader = datareaders["train"], datareaders["val"]
+    train_reader.set_step(substep)
+    stats = {"train_loss": [], "val_loss": [], "val_pp": [], "val_acc": []}
     grad_norms = []
-
     model.train()
 
-    t0 = time.time()
+    while curr_iter <= cfg.iterations:
+        # Save permanent checkpoint
+        if cfg.permanent_ckpt_interval > 0:
+            if curr_iter % cfg.permanent_ckpt_interval == 0:
+                ckpt_dir = exp_dir / "ckpts" / str(curr_iter)
+                if distributed_backend.is_master_process():
+                    save_checkpoint(model, opt, scheduler, curr_iter, ckpt_dir)
+                save_worker_state(ckpt_dir)
 
-    if rng_state_dict is not None:
-        torch.set_rng_state(rng_state_dict["cpu_rng_state"])
-        torch.cuda.set_rng_state(rng_state_dict["gpu_rng_state"])
-        np.random.set_state(rng_state_dict["numpy_rng_state"])
-        random.setstate(rng_state_dict["py_rng_state"])
-    for _ in range(substep % num_substeps_per_epoch):
-        get_batch(data_train_iter, device=extra_args.device)
+        # Save temporary checkpoint for resuming training
+        if cfg.latest_ckpt_interval > 0:
+            if curr_iter % cfg.latest_ckpt_interval == 0 or curr_iter == cfg.iterations:
+                ckpt_dir = exp_dir / "ckpts" / "latest"
+                if distributed_backend.is_master_process():
+                    save_checkpoint(model, opt, scheduler, curr_iter, ckpt_dir)
+                save_worker_state(ckpt_dir)
 
-    while itr < iterations:
+        ws = distributed_backend.get_world_size()
+        tokens = ws * substep * cfg.sequence_length * cfg.batch_size
+        epoch = tokens / train_reader.num_tokens
+        if (
+            curr_iter % cfg.eval_interval == 0
+            or curr_iter == cfg.iterations
+            or (curr_iter in cfg.full_eval_at)
+        ):
+            eval_and_log(
+                curr_iter,
+                epoch,
+                model,
+                val_reader,
+                type_ctx,
+                distributed_backend,
+                cfg,
+                opt,
+                full_eval=(curr_iter in cfg.full_eval_at),
+            )
 
-        for microstep_idx in range(acc_steps):  # gradient accumulation
-            x, y = get_batch(data_train_iter, device=extra_args.device)
+        if curr_iter == cfg.iterations:
+            # Save checkpoints and evaluate at final iteration, but no need to train further
+            break
 
+        # Train model
+        t_start = time.perf_counter_ns()
+        for microstep_idx in range(cfg.acc_steps):  # gradient accumulation
+            x, y = get_batch(train_reader, device=cfg.device)
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(
                     model=model,
                     microstep_idx=microstep_idx,
-                    gradient_accumulation_steps=acc_steps,
+                    gradient_accumulation_steps=cfg.acc_steps,
                 ):
                     outputs = model(x, targets=y)
 
-            loss = outputs["loss"] / acc_steps
+            loss = outputs["loss"] / cfg.acc_steps
             loss.backward()
             substep += 1
-            if substep % len(data["train"]) == 0:
-                train_epochs += 1
-                print(f"Train epoch {train_epochs} done (full pass over training data)")
-                if hasattr(train_sampler, "set_epoch"):
-                    # set epoch for reshuffling between epochs
-                    train_sampler.set_epoch(train_epochs)
-                    sampler_state_before_iter = None
-                else:
-                    sampler_state_before_iter = train_sampler.generator.get_state()
-                data_train_iter = iter(data["train"])
 
-        if extra_args.grad_clip != 0.0:
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), extra_args.grad_clip
-            )
+        if cfg.grad_clip != 0.0:
+            if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.module.parameters(), cfg.grad_clip)
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             grad_norms.append(grad_norm)
+
         if extra_args.opt == "sf-sgd" or extra_args.opt == "sf-adamw":
             opt.train()
         opt.step()
         if extra_args.scheduler != "none":
             scheduler.step()
         opt.zero_grad(set_to_none=True)
-        itr += 1
+        dt = (time.perf_counter_ns() - t_start) / 1e9
+
+        curr_iter += 1
 
         if (
-            itr % eval_freq == 0 or itr == iterations
-        ):  # from here it's only evaluation code, all the training is above
-            if distributed_backend.is_master_process():
-                t1 = time.time()
-                dt = t1 - t0
-                epoch = substep // num_substeps_per_epoch
+            cfg.log_interval
+            and curr_iter % cfg.log_interval == 0
+            and distributed_backend.is_master_process()  # Only log on master rank
+        ):
+            train_loss = loss.detach().cpu().item() * cfg.acc_steps
 
-                model.eval()
-                if extra_args.opt == "sf-sgd" or extra_args.opt == "sf-adamw":
-                    opt.eval()
-                train_loss = loss.detach().cpu().item() * acc_steps
-                current_lr = (
-                    scheduler.get_last_lr()[0]
-                    if scheduler is not None
-                    else extra_args.lr
-                )
+            current_lrs = [param_group["lr"] for param_group in opt.param_groups]
 
-                eval_steps = 24 if itr < iterations else len(data["val"])
-                val_acc, val_loss, val_perplexity = eval(
-                    model,
-                    data_val_iter,
-                    extra_args.device,
-                    max_num_batches=eval_steps,
-                    ctx=type_ctx,
-                    reset_iterator=True,
-                )
+            print(
+                f"Train: Iter={curr_iter} ({epoch:0.3f} epochs) "
+                f"train_loss={train_loss:.3f} iter_dt={dt:.2e}s "
+                f"lr={current_lrs[0]:.2e}"
+            )
 
-                print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
-                print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
-                if scheduler is not None:
-                    print_string += f" [lr] {current_lr:.5f}"
-                print(print_string)
-
-                if extra_args.wandb:
-                    logs = {
-                        "iter": itr,
+            if cfg.wandb:
+                wandb.log(
+                    {
+                        "iter": curr_iter,
                         "train/loss": train_loss,
-                        "train/max_grad_norm": (
-                            max(grad_norms).item() if grad_norms else 0
-                        ),
-                        "train/mean_grad_norm": (
-                            torch.tensor(grad_norms).mean().item() if grad_norms else 0
-                        ),
-                        "val/loss": val_loss,
-                        "val/perplexity": val_perplexity,
-                        "val/acc": val_acc,
-                        "lr": current_lr,
+                        "train/perplexity": 2.71828**train_loss,
+                        "lr": current_lrs[0],
+                        "iter_dt": dt,
+                        "max_grad_norm": max(grad_norms).item() if grad_norms else 0,
+                        "mean_grad_norm": torch.tensor(grad_norms).mean().item() if grad_norms else 0,
                     }
-
-                    if itr == iterations:
-                        logs["val/final-ppl"] = val_perplexity
-                        logs["val/final-acc"] = val_acc
-                        logs["val/final-loss"] = val_loss
-
-                    wandb.log(logs)
-
-                    if extra_args.eval_seq_prefix != "none" and (
-                        itr % (eval_freq * 5) == 0 or itr == iterations
-                    ):
-                        if text_table is None:
-                            text_table = wandb.Table(columns=["itr", "val-pp", "text"])
-
-                        out_str = distributed_backend.get_raw_model(
-                            model
-                        ).generate_from_string(
-                            extra_args.eval_seq_prefix,
-                            max_new_tokens=40,
-                            temperature=0.9,
-                            top_k=None,
-                        )
-                        text_table.add_data(itr, val_perplexity, out_str)
-                        # why a copy? see github.com/wandb/wandb/issues/2981
-                        wandb.log(
-                            {f"generated-text-{wandb.run.name}": copy.copy(text_table)}
-                        )
-
-                grad_norms = []
-
-                model.train()
-                t0 = time.time()
-        if distributed_backend.is_master_process():
-            if (
-                extra_args.save_checkpoint_freq is not None
-                and itr % extra_args.save_checkpoint_freq == 0
-            ):
-                print(
-                    f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt"
                 )
-                save_checkpoint(
-                    distributed_backend=distributed_backend,
-                    model=model,
-                    opt=opt,
-                    scheduler=scheduler,
-                    itr=itr,
-                    cpu_rng_state=torch.get_rng_state(),
-                    gpu_rng_state=torch.cuda.get_rng_state(),
-                    numpy_rng_state=np.random.get_state(),
-                    py_rng_state=random.getstate(),
-                    train_sampler_state=sampler_state_before_iter,
-                    ckpt_path=os.path.join(
-                        os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"
-                    ),
-                )
+            
+            grad_norms = []
 
-    if distributed_backend.is_master_process():
-        print(f"saving checkpoint to {ckpt_path}")
-        save_checkpoint(
-            distributed_backend=distributed_backend,
-            model=model,
-            opt=opt,
-            scheduler=scheduler,
-            itr=itr,
-            ckpt_path=ckpt_path,
-        )
 
     return stats
+
+
+def eval_and_log(
+    curr_iter,
+    epoch,
+    model,
+    val_reader,
+    type_ctx,
+    distributed_backend,
+    cfg,
+    opt,
+    full_eval=False,
+):
+    if not distributed_backend.is_master_process():
+        # Only evaluate and log on master rank
+        return
+
+    model.eval()
+    if cfg.opt == "SFAdamW":
+        opt.eval()
+
+    if curr_iter == cfg.iterations or full_eval:
+        max_num_batches = val_reader.num_batches()
+    else:
+        max_num_batches = cfg.eval_batches
+
+    # to make sure we start from the beginning of the validation set,
+    # i.e. repeat the same batches
+    val_reader.set_step(0)
+    val_acc, val_loss, val_perplexity = eval(
+        model,
+        val_reader,
+        cfg.device,
+        max_num_batches=max_num_batches,
+        ctx=type_ctx,
+        cfg=cfg,
+    )
+
+    print(
+        f">Eval: Iter={curr_iter} ({epoch:0.3f} epochs) "
+        f"val_loss={val_loss:.3f} "
+        f"val_pp={val_perplexity:.3f} "
+        f"val_acc={val_acc:3f}"
+    )
+
+    if cfg.wandb:
+        if curr_iter == cfg.iterations or full_eval:
+            logs = {
+                "iter": curr_iter,
+                "final-val/loss": val_loss,
+                "final-val/perplexity": val_perplexity,
+                "final-val/acc": val_acc,
+            }
+        else:
+            logs = {
+                "iter": curr_iter,
+                "val/loss": val_loss,
+                "val/perplexity": val_perplexity,
+                "val/acc": val_acc,
+            }
+
+        wandb.log(logs)
+        if cfg.eval_seq_prefix != "none" and (
+            curr_iter % (cfg.eval_interval * 5) == 0 or curr_iter == cfg.iterations
+        ):
+            text_table = wandb.Table(columns=["itr", "val-pp", "text"])
+
+            out_str = distributed_backend.get_raw_model(model).generate_from_string(
+                cfg.eval_seq_prefix,
+                max_new_tokens=40,
+                temperature=0.9,
+                top_k=None,
+            )
+            text_table.add_data(curr_iter, val_perplexity, out_str)
+            # why a copy? see github.com/wandb/wandb/issues/2981
+            wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)})
+    model.train()
+
