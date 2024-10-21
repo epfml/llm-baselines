@@ -38,12 +38,11 @@ parser.add_argument('--seed', default=0, type=int) # random seed for the paramet
 parser.add_argument('--data_seed', default=1337, type=int) # random seed defining the data ordering
 parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
 parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
-parser.add_argument("--warmup_steps", default=300, type=int) # it was only warmup_percent before
+parser.add_argument("--warmup_steps", default=300, type=int)
 parser.add_argument('--lr', default=1e-3, type=float)
 parser.add_argument("--wsd_final_lr_scale", default=0.0, type=float) # wsd scheduler
 parser.add_argument("--wsd_fract_decay", default=0.1, type=float) # wsd scheduler 
 parser.add_argument("--decay_type", default="linear", choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"])
-parser.add_argument('--warmup_percent', default=0.05, type=float) # the total number of warmup_steps is iterations * warmup_percent
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
@@ -71,6 +70,8 @@ parser.add_argument("--adema_beta3_warmup", default=None, type=int) # AdEMAMix h
 parser.add_argument("--adema_alpha_warmup", default=None, type=int) # AdEMAMix hyperparameter
 parser.add_argument("--schedulefree_r", defalut=0.0, type=float) # schedulefree hyperparameter
 parser.add_argument("--weight_lr_power", default=2.0, type=float) # schedulefree hyperparameter
+parser.add_argument("--model_sharding", default=None, type=bool) # Adam-mini
+parser.add_argument("--adam_mini_verbose", default=False, type=bool) # print all the logs if true
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
 parser.add_argument('--vocab_size', default=50304, type=int)
@@ -88,6 +89,7 @@ parser.add_argument('--bias', default=False, type=bool)
 parser.add_argument('--compile', action='store_true') # if true then model is compiled 
 parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
 parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
+parser.add_argument('--n_kv_head', default=None, type=Optional[int])
 # logging params (WandB)
 parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
 parser.add_argument('--wandb_project', default="my-project", type=str)

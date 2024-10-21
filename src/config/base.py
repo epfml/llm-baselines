@@ -9,6 +9,7 @@ def none_or_str(value):
 
 def parse_args(base_parser, args, namespace):
     parser = base_parser
+
     # General training params
     parser.add_argument("--run_prefix", default=None, type=str)
     parser.add_argument("--experiment_name", default=None, type=str)
@@ -86,6 +87,7 @@ def parse_args(base_parser, args, namespace):
             "lion",
             "sf-adamw",
             "sf-sgd",
+            "adam-mini",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -114,6 +116,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--adema_alpha_warmup", default=None, type=int)
     parser.add_argument("--schedulefree_r", default=0.0, type=float)
     parser.add_argument("--weight_lr_power", default=2.0, type=float)
+    parser.add_argument("--model_sharding", default=None, type=bool)
+    parser.add_argument("--adam_mini_verbose", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
