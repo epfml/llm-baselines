@@ -1,15 +1,13 @@
 import os
-import urllib
 import zipfile
-
+import urllib
 import numpy as np
 import tiktoken
 
-WIKITEXT_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/wikitext/")
 
-
-def get_wikitext_data():
+def get_wikitext_data(datasets_base_dir):
     """Inspired from https://github.com/tysam-code/hlb-gpt"""
+    WIKITEXT_DATA_PATH = os.path.join(datasets_base_dir, "wikitext/")
     if not os.path.exists(WIKITEXT_DATA_PATH):
         os.makedirs(WIKITEXT_DATA_PATH, exist_ok=True)
         print("downloading data and tokenizing (1-2 min)")
@@ -44,11 +42,7 @@ def get_wikitext_data():
         eval_tokenized.tofile(os.path.join(WIKITEXT_DATA_PATH, "val.bin"))
         print("completed the tokenization process!")
 
-    train_data = np.memmap(
-        os.path.join(WIKITEXT_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r"
-    )
-    val_data = np.memmap(
-        os.path.join(WIKITEXT_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r"
-    )
-
-    return {"train": train_data, "val": val_data}
+    return {
+        "train": os.path.join(WIKITEXT_DATA_PATH, "train.bin"),
+        "val": os.path.join(WIKITEXT_DATA_PATH, "val.bin"),
+    }

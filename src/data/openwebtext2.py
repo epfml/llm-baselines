@@ -1,16 +1,16 @@
 import os
-
+from tqdm import tqdm
 import numpy as np
 import tiktoken
 from datasets import load_dataset
-from tqdm import tqdm
 
-OWT2_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/openwebtext2/")
+
 tknzr = tiktoken.get_encoding("gpt2")
 
 
-def get_openwebtext2_data(num_proc=40):
+def get_openwebtext2_data(datasets_base_dir, num_proc=40):
     """https://openwebtext2.readthedocs.io/en/latest/"""
+    OWT2_DATA_PATH = os.path.join(datasets_base_dir, "openwebtext2/")
     if not os.path.exists(os.path.join(OWT2_DATA_PATH, "train.bin")):
         os.makedirs(OWT2_DATA_PATH, exist_ok=True)
         dataset = load_dataset("the_pile_openwebtext2")
@@ -59,11 +59,7 @@ def get_openwebtext2_data(num_proc=40):
                 idx += len(arr_batch)
             arr.flush()
 
-    train_data = np.memmap(
-        os.path.join(OWT2_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r"
-    )
-    val_data = np.memmap(
-        os.path.join(OWT2_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r"
-    )
-
-    return {"train": train_data, "val": val_data}
+    return {
+        "train": os.path.join(OWT2_DATA_PATH, "train.bin"),
+        "val": os.path.join(OWT2_DATA_PATH, "val.bin"),
+    }

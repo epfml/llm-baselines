@@ -1,14 +1,16 @@
-import itertools
-import math
-from contextlib import ExitStack, contextmanager, nullcontext
-
+from pathlib import Path
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
+from contextlib import nullcontext
+import torch.distributed as dist
+import math
+import wandb
 
 
-def get_batch(dataloader, device="cpu"):
-    x, y = next(dataloader)
+def get_batch(datareader, device="cpu"):
+    x, y = datareader.sample_batch()
     if "cuda" in torch.device(device).type:
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x = x.pin_memory().to(device, non_blocking=True)
@@ -126,24 +128,22 @@ def wsd_schedule(
 @torch.no_grad()
 def eval(
     model,
-    data_val_iter,
+    reader,
     device="cpu",
     max_num_batches=24,
     ctx=nullcontext(),
-    reset_iterator=False,
+    cfg=None,
 ):
     assert model.training == False
 
-    if reset_iterator:  # ensure that we always eval on the same batches
-        data_val_iter = itertools.cycle(data_val_iter)
-
     loss_list_val, acc_list = [], []
 
-    for _ in range(max_num_batches):
-        x, y = get_batch(data_val_iter, device=device)
+    for idx in range(max_num_batches):
+        x, y = get_batch(reader, device=device)
         with ctx:
             outputs = model(x, targets=y, get_logits=True)
         val_loss = outputs["loss"]
+
         loss_list_val.append(val_loss)
         acc_list.append((outputs["logits"].argmax(-1) == y).float().mean())
 
@@ -154,18 +154,135 @@ def eval(
     return val_acc, val_loss, val_perplexity
 
 
-def save_checkpoint(
-    distributed_backend, model, opt, scheduler, itr, ckpt_path, **extra_args
+@torch.no_grad()
+def eval_sweep_dropk(
+    model,
+    data_tensor,
+    sequence_length,
+    batch_size,
+    n_heads,
+    device="cpu",
+    max_num_batches=24,
+    ctx=nullcontext(),
 ):
+    assert model.training == False
 
-    checkpoint = dict(
-        {
-            "model": distributed_backend.get_raw_model(model).state_dict(),
-            "optimizer": opt.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "itr": itr,
-        },
-        **extra_args,
+    x_axis, y_axis_pp, y_axis_acc, y_axis_loss = (
+        torch.linspace(0.0, 0.95, 15),
+        [],
+        [],
+        [],
     )
+    loss_list_val, acc_list = [], []
 
-    torch.save(checkpoint, ckpt_path)
+    for frac in x_axis:
+        drop_k = int(sequence_length * frac * n_heads)
+        for _ in range(max_num_batches):
+            x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
+            with ctx:
+                outputs = model(
+                    x, targets=y, alpha_th=None, drop_k=drop_k, get_logits=True
+                )
+            loss_list_val.append(outputs["ce_loss"])
+            acc_list.append((outputs["logits"].argmax(-1) == y).float().mean())
+
+        y_axis_acc.append(torch.stack(acc_list).mean().item())
+        y_axis_loss.append(np.mean(loss_list_val))
+        y_axis_pp.append(2.71828 ** y_axis_loss[-1])
+
+    return x_axis, y_axis_acc, y_axis_pp, y_axis_loss
+
+
+@torch.no_grad()
+def eval_sweep_alphath(
+    model,
+    data_tensor,
+    sequence_length,
+    batch_size,
+    device="cpu",
+    max_num_batches=24,
+    ctx=nullcontext(),
+):
+    assert model.training == False
+
+    alpha_ths, y_axis_pp, y_axis_acc, y_axis_loss = (
+        [0, 1e-4, 1e-3, 1e-2, 1e-1, 2e-1, 3e-1, 4e-1, 5e-1],
+        [],
+        [],
+        [],
+    )
+    loss_list_val, acc_list, x_axis = [], [], []
+
+    for alpha_th in alpha_ths:
+        frac_heads_pruned_list = []
+        for _ in range(max_num_batches):
+            x, y = get_batch(data_tensor, sequence_length, batch_size, device=device)
+            with ctx:
+                outputs = model(
+                    x, targets=y, alpha_th=alpha_th, drop_k=None, get_logits=True
+                )
+            nph, nh = (
+                outputs["num_head_pruned_per_layer"],
+                outputs["num_heads_per_layer"],
+            )
+            frac_heads_pruned = np.sum(nph) / np.sum(
+                nh
+            )  # fractions of heads removed given alpha_th
+            frac_heads_pruned_list.append(frac_heads_pruned)
+            loss_list_val.append(outputs["ce_loss"])
+            acc_list.append((outputs["logits"].argmax(-1) == y).float().mean())
+
+        x_axis.append(np.mean(frac_heads_pruned_list))
+        y_axis_acc.append(torch.stack(acc_list).mean().item())
+        y_axis_loss.append(np.mean(loss_list_val))
+        y_axis_pp.append(2.71828 ** y_axis_loss[-1])
+
+    return x_axis, y_axis_acc, y_axis_pp, y_axis_loss
+
+
+def save_checkpoint(model, opt, scheduler, itr, ckpt_dir: Path):
+    if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+        model = model.module
+
+    checkpoint = {
+        "model": model.state_dict(),
+        "optimizer": opt.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "itr": itr,
+    }
+    ckpt_dir.mkdir(exist_ok=True, parents=True)
+    torch.save(checkpoint, ckpt_dir / "main.pt")
+
+
+def load_checkpoint(model, opt, scheduler, ckpt_path, device):
+    if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+        model = model.module
+
+    ckpt = torch.load(ckpt_path, map_location=device)
+    model.load_state_dict(ckpt["model"])
+    opt.load_state_dict(ckpt["optimizer"])
+    scheduler.load_state_dict(ckpt["scheduler"])
+    itr = ckpt["itr"]
+    return itr
+
+
+def save_worker_state(ckpt_dir: Path):
+    # Dataloader, rng states
+    worker_state = {
+        "rng_torch_cpu": torch.random.get_rng_state(),
+        "rng_torch_gpu": torch.cuda.get_rng_state(),
+        "rng_np": np.random.get_state(),
+        "rng_python": random.getstate(),
+    }
+    rank = 0 if not dist.is_initialized() else dist.get_rank()
+    ckpt_dir.mkdir(exist_ok=True, parents=True)
+    torch.save(worker_state, ckpt_dir / f"worker_{rank}.pt")
+
+
+def load_worker_state(ckpt_dir: Path):
+    rank = 0 if not dist.is_initialized() else dist.get_rank()
+    worker_state = torch.load(ckpt_dir / f"worker_{rank}.pt")
+    torch.random.set_rng_state(worker_state["rng_torch_cpu"])
+    torch.cuda.set_rng_state(worker_state["rng_torch_gpu"])
+    np.random.set_state(worker_state["rng_np"])
+    random.setstate(worker_state["rng_python"])

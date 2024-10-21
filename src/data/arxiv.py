@@ -1,16 +1,17 @@
-import logging
 import os
 import tarfile
-from multiprocessing import Pool
+import logging
 from pathlib import Path
-from subprocess import PIPE, Popen, TimeoutExpired
+from typing import Optional
+from multiprocessing import Pool
 from tempfile import NamedTemporaryFile
-from typing import List, Optional, Tuple
+from subprocess import Popen, TimeoutExpired, PIPE
+from typing import Tuple, List
 
 import numpy as np
 import requests
-import tiktoken
 from tqdm.auto import tqdm
+import tiktoken
 
 
 def convert_to_markdown(args: Tuple[Path, Path]):
@@ -82,7 +83,7 @@ def tokenize_arxiv(root: Path, year: int):
 
 
 def load_arxiv(cachedir: Path, years: Optional[List[int]] = None):
-    all_years = list(range(1992, 2004))
+    all_years = list(range(1993, 2004))  # 1992 seems to give some problem
     if years is None:
         years = all_years
     assert set(years) <= set(all_years)
@@ -108,9 +109,9 @@ def load_arxiv(cachedir: Path, years: Optional[List[int]] = None):
     return ret
 
 
-def get_arxiv_2000():
-    return load_arxiv(Path(os.path.dirname(__file__)) / "datasets", [2000])
+def get_arxiv_2000(datasets_base_dir):
+    return load_arxiv(Path(datasets_base_dir), [2000])
 
 
-def get_arxiv_full():
-    return load_arxiv(Path(os.path.dirname(__file__)) / "datasets")
+def get_arxiv_full(datasets_base_dir):
+    return load_arxiv(Path(datasets_base_dir))

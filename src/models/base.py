@@ -7,7 +7,6 @@ https://github.com/openai/gpt-2/blob/master/src/model.py
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
 """
 
-import inspect
 import math
 
 import tiktoken
@@ -29,7 +28,6 @@ class LayerNorm(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
@@ -58,21 +56,21 @@ class CausalSelfAttention(nn.Module):
             )
 
     def forward(self, x):
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (n_embd)
+        # batch size, sequence length, embedding dimensionality (n_embd)
+        (
+            B,
+            T,
+            C,
+        ) = x.size()
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
+        # (B, T, nh, hs)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+
+        # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -97,11 +95,16 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-
-    def __init__(self, config):
+    def __init__(self, config, exp_factor=1.0):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.dim_exp_factor = exp_factor * 4
+
+        self.c_fc = nn.Linear(
+            config.n_embd, int(self.dim_exp_factor * config.n_embd), bias=config.bias
+        )
+        self.c_proj = nn.Linear(
+            int(self.dim_exp_factor * config.n_embd), config.n_embd, bias=config.bias
+        )
         self.dropout = nn.Dropout(config.dropout)
         self.activation = nn.GELU()
 
@@ -114,22 +117,30 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.parallel = config.parallel_block
+        if not self.parallel:
+            self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+    def forward(self, x, *args, **kwargs):
+        if self.parallel:
+            # from GPT-J 6B https://github.com/kingoflolz/mesh-transformer-jax/blob/f8315e3003033b23f21d78361b288953064e0e76/mesh_transformer/layers.py#L299
+            x_ln = self.ln_1(x, *args, **kwargs)
+            x_attn = self.attn(x_ln)
+            x_ffn = self.mlp(x_ln)
+            x = x + x_attn + x_ffn
+        else:
+            x = x + self.attn(self.ln_1(x, *args, **kwargs))
+            x_ = self.mlp(self.ln_2(x, *args, **kwargs))
+            x = x + x_
         return x
 
 
 class GPTBase(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         assert config.vocab_size is not None
@@ -162,11 +173,10 @@ class GPTBase(nn.Module):
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+                    p,
+                    mean=0.0,
+                    std=self.config.init_std / math.sqrt(2 * config.n_layer),
                 )
-
-        # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
         """
@@ -182,11 +192,11 @@ class GPTBase(nn.Module):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.init_std)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.init_std)
 
     def forward(self, idx, targets=None, get_logits=False):
         device = idx.device
@@ -194,9 +204,8 @@ class GPTBase(nn.Module):
         assert (
             t <= self.config.sequence_length
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.sequence_length}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(
-            0
-        )  # shape (1, t)
+        # shape (1, t)
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
@@ -204,6 +213,8 @@ class GPTBase(nn.Module):
             pos
         )  # position embeddings of shape (1, t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
+
+        # forward pass through all the transformer blocks
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -214,6 +225,7 @@ class GPTBase(nn.Module):
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
+
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -221,7 +233,10 @@ class GPTBase(nn.Module):
             )  # note: using list [-1] to preserve the time dim
             loss = None
         logits = logits if get_logits else None
-        return {"logits": logits, "loss": loss}
+        return {
+            "logits": logits,
+            "loss": loss,
+        }
 
     def crop_sequence_length(self, sequence_length):
         # model surgery to decrease the block size if necessary
@@ -235,10 +250,24 @@ class GPTBase(nn.Module):
         for block in self.transformer.h:
             block.attn.bias = block.attn.bias[:, :, :sequence_length, :sequence_length]
 
-    @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
-        # TODO
-        pass
+    def from_pretrained(
+        self,
+        model_path,
+    ):
+        paths = model_path.split(",")
+        if len(paths) == 1:
+            # TODO: with distributed?
+            loaded_state = torch.load(
+                str(model_path + "/ckpt.pt"),
+                map_location=torch.device(self.config.device),
+            )
+            state_to_load = loaded_state["model"]
+
+            # load the sparse model
+            state_to_load = {
+                ".".join(k.split(".")[1:]): v  # drop _orig_mod from keys
+                for k, v in state_to_load.items()
+            }
 
     def get_parameter_group_specs(self):
         """
