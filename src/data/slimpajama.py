@@ -1,9 +1,9 @@
-from tqdm import tqdm
+import os
+
 import numpy as np
 import tiktoken
 from datasets import load_dataset
-import os
-
+from tqdm import tqdm
 
 tknzr = tiktoken.get_encoding("gpt2")
 

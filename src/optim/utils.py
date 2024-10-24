@@ -1,11 +1,13 @@
-from pathlib import Path
+import math
 import random
+from contextlib import nullcontext
+from pathlib import Path
+
 import numpy as np
 import torch
-import torch.nn.functional as F
-from contextlib import nullcontext
 import torch.distributed as dist
-import math
+import torch.nn.functional as F
+
 import wandb
 
 
@@ -247,7 +249,7 @@ def save_checkpoint(model, opt, scheduler, itr, ckpt_dir: Path):
     checkpoint = {
         "model": model.state_dict(),
         "optimizer": opt.state_dict(),
-        "scheduler": scheduler.state_dict(),
+        "scheduler": scheduler.state_dict() if scheduler is not None else None,
         "itr": itr,
     }
     ckpt_dir.mkdir(exist_ok=True, parents=True)
@@ -261,7 +263,8 @@ def load_checkpoint(model, opt, scheduler, ckpt_path, device):
     ckpt = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(ckpt["model"])
     opt.load_state_dict(ckpt["optimizer"])
-    scheduler.load_state_dict(ckpt["scheduler"])
+    if scheduler is not None:
+        scheduler.load_state_dict(ckpt["scheduler"])
     itr = ckpt["itr"]
     return itr
 

@@ -1,21 +1,16 @@
-from contextlib import nullcontext
 import copy
-from pathlib import Path
 import time
-import yaml
+from contextlib import nullcontext
+from pathlib import Path
 
 import torch
+import yaml
+
 import wandb
 
 # from logger.logger import DynamicsLogger
-from .utils import (
-    eval,
-    get_batch,
-    load_checkpoint,
-    load_worker_state,
-    save_checkpoint,
-    save_worker_state,
-)
+from .utils import (eval, get_batch, load_checkpoint, load_worker_state,
+                    save_checkpoint, save_worker_state)
 
 
 def train(
@@ -138,9 +133,13 @@ def train(
 
         if cfg.grad_clip != 0.0:
             if isinstance(model, torch.nn.parallel.DistributedDataParallel):
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.module.parameters(), cfg.grad_clip)
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.module.parameters(), cfg.grad_clip
+                )
             else:
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), cfg.grad_clip
+                )
             grad_norms.append(grad_norm)
 
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
@@ -178,12 +177,13 @@ def train(
                         "lr": current_lrs[0],
                         "iter_dt": dt,
                         "max_grad_norm": max(grad_norms).item() if grad_norms else 0,
-                        "mean_grad_norm": torch.tensor(grad_norms).mean().item() if grad_norms else 0,
+                        "mean_grad_norm": (
+                            torch.tensor(grad_norms).mean().item() if grad_norms else 0
+                        ),
                     }
                 )
-            
-            grad_norms = []
 
+            grad_norms = []
 
     return stats
 
@@ -205,7 +205,7 @@ def eval_and_log(
         return
 
     model.eval()
-    if cfg.opt == "SFAdamW":
+    if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
         opt.eval()
 
     if curr_iter == cfg.iterations or full_eval:
@@ -266,4 +266,3 @@ def eval_and_log(
             # why a copy? see github.com/wandb/wandb/issues/2981
             wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)})
     model.train()
-
