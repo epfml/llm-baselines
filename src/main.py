@@ -15,6 +15,7 @@ import distributed
 import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
+from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
 from optim.base import train
@@ -107,6 +108,8 @@ def main(args, parser):
             {"parameters": params_cnt, "optimized_parameters": optimized_params_cnt}
         )
 
+    args.world_size = distributed_backend.get_world_size()
+
     if args.opt == "adamw":
         device_type = 'cuda' if 'cuda' in args.device else 'cpu'
         use_fused = (device_type == "cuda") and (
@@ -194,6 +197,20 @@ def main(args, parser):
             r=args.schedulefree_r,
             weight_lr_power=args.weight_lr_power,
         )  # without foreach argument
+    elif args.opt == "adam-mini":
+        opt = Adam_mini(
+            device=args.device,
+            world_size=args.world_size,
+            named_parameters=model.named_parameters(),  # check
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            model_sharding=args.model_sharding,
+            dim=args.n_embd,
+            n_heads=args.n_head,
+            n_kv_heads=args.n_kv_head,
+            verbose=args.adam_mini_verbose,
+        )
     else:
         opt = torch.optim.SGD(
             group_specs,
@@ -345,66 +362,7 @@ def get_exp_name(args, parser, distributed_backend, key_args=['model', 'dataset'
         return f"{prefix}__{non_default_string}"
     else:
         return prefix
-
-
-# def get_exp_name(args, distributed_backend):
-#     """Returns the name of the experiment, used for saving models and wandb."""
-#     if args.experiment_name is not None:
-#         return args.experiment_name
-
-#     rank = distributed_backend.rank
-
-#     exp_name = (
-#         f"{args.dataset}_{args.model}_nlayers{args.n_layer}"
-#         f"_nhead{args.n_head}_lr{args.lr}"
-#         f"_sched_{args.scheduler}_warmup{args.warmup_steps}"
-#         f"_decay_{args.decay_type}_{args.wsd_fract_decay}"
-#         f"_iter{args.iterations}"
-#         f"_bs{args.batch_size}x{args.acc_steps}_ws{args.world_size}"
-#     )
-#     # for mup
-#     if args.model == "mup_noam":
-#         exp_name = (
-#             f"{args.dataset}_{args.model}"
-#             f"_opt{args.opt}"
-#             f"_nlayers{args.n_layer}"
-#             # f"_nhead{args.n_head}"
-#             f"_lr{args.lr}"
-#             f"_sched_{args.scheduler}"
-#             f"_decay_{args.decay_type}"
-#             # f"_warmup{args.warmup_steps}"
-#             f"_iter{args.iterations}"
-#             f"_init{args.init_std}_sce{args.scale_emb}"
-#             f"_scd{args.scale_depth}"
-#             # f"_bs{args.batch_size}x{args.acc_steps}_ws{args.world_size}"
-#         )
-#     if args.run_prefix is not None:
-#         exp_name = args.run_prefix + "_" + exp_name
-#     if args.wandb_run_prefix != "none":
-#         exp_name = args.wandb_run_prefix + "_" + exp_name
-#     exp_name += f"_seed{args.seed - rank}"
-#     exp_name += f"_data_seed{args.data_seed}"
-
-#     if args.opt == "SFAdamW":
-#         exp_name += f"_beta1_{args.beta1}"
-#         exp_name += f"_beta2_{args.beta2}"
-
-#     if args.opt == "ademamix":
-#         exp_name += f"_beta3_{args.adema_beta3}"
-#         exp_name += f"_alpha_{args.adema_alpha}"
-#         exp_name += f"_beta3_warmup_{args.adema_beta3_warmup}"
-#         exp_name += f"_alpha_warmup_{args.adema_alpha_warmup}"
-
-#     if args.opt == "lion":
-#         exp_name += f"_beta1_{args.beta1}"
-#         exp_name += f"_beta2_{args.beta2}"
-
-#     if args.opt == "adamw":
-#         exp_name += f"_beta1_{args.beta1}"
-#         exp_name += f"_beta2_{args.beta2}"
-
-#     return exp_name
-
+      
 
 if __name__ == "__main__":
     args, parser = get_args()

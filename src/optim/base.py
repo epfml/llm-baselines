@@ -18,15 +18,6 @@ from .utils import (
 )
 
 
-def compute_gradient_norm(model):
-    total_norm = 0.0
-    for param in model.parameters():
-        if param.grad is not None:
-            param_norm = param.grad.data.norm(2)
-            total_norm += param_norm ** 2
-    return torch.sqrt(torch.tensor([total_norm]))
-
-
 def train(
     model,
     opt,
@@ -151,11 +142,12 @@ def train(
             else:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             grad_norms.append(grad_norm)
-            # grad_norms.append(compute_gradient_norm(model))
-        if cfg.opt == "SFAdamW":
+
+        if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
         opt.step()
-        scheduler.step()
+        if cfg.scheduler != "none":
+            scheduler.step()
         opt.zero_grad(set_to_none=True)
         dt = (time.perf_counter_ns() - t_start) / 1e9
 
