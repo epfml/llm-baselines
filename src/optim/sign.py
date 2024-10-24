@@ -1,71 +1,113 @@
+from typing import Dict
+
 import torch
 
 
 class Signum(torch.optim.Optimizer):
-    r"""Implements Signum optimizer that takes the sign of gradient or momentum.
+    def __init__(
+        self,
+        params,
+        lr=1e-3,
+        momentum=0,
+        dampening=0,
+        weight_decay=0,
+        nesterov=False,
+        sign_update=True,
+    ):
+        if lr < 0.0:
+            raise ValueError(f"Invalid learning rate: {lr}")
+        if momentum < 0.0:
+            raise ValueError(f"Invalid momentum value: {momentum}")
+        if weight_decay < 0.0:
+            raise ValueError(f"Invalid weight_decay value: {weight_decay}")
 
-    See details in the original paper at: https://arxiv.org/abs/1711.05101
-
-    Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float): learning rate
-        momentum (float, optional): momentum factor (default: 0.9)
-        weight_decay (float, optional): weight decay (default: 0)
-
-    Example:
-        >>> optimizer = signum.Signum(model.parameters(), lr=0.1, momentum=0.9)
-        >>> optimizer.zero_grad()
-        >>> loss_fn(model(input), target).backward()
-        >>> optimizer.step()
-    """
-
-    def __init__(self, params, lr=0.01, momentum=0.9, weight_decay=0, **kwargs):
-        if not 0.0 <= lr:
-            raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= momentum:
-            raise ValueError("Invalid momentum value: {}".format(momentum))
-        if not 0.0 <= weight_decay:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
-
-        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
-
-        super(Signum, self).__init__(params, defaults)
+        defaults = dict(
+            lr=lr,
+            momentum=momentum,
+            dampening=dampening,
+            weight_decay=weight_decay,
+            nesterov=nesterov,
+            sign_update=sign_update,
+        )
+        if nesterov and (momentum <= 0 or dampening != 0):
+            raise ValueError("Nesterov momentum requires a momentum and zero dampening")
+        super().__init__(params, defaults)
 
     def __setstate__(self, state):
-        super(Signum, self).__setstate__(state)
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault("nesterov", False)
 
+    @torch.no_grad()
+    def _init_state(self, example, state=None):
+        assert isinstance(example, torch.Tensor)
+        assert isinstance(state, Dict) or state is None
+        if state is None:
+            state = {}
+        state["step"] = 0
+        state["momentum_buffer"] = torch.clone(example).detach()
+        return state
+
+    @torch.no_grad()
+    def _compute_update(
+        self, grad, state, lr, momentum, nesterov, dampening, sign_update, **kwargs
+    ):
+
+        if momentum != 0:  # Signum check
+            buf = state["momentum_buffer"]
+            buf.mul_(momentum).add_(grad, alpha=1 - dampening)
+
+            if nesterov:
+                grad = grad.add(buf, alpha=momentum)
+            else:
+                grad = buf
+
+        if sign_update:
+            grad = grad.sign()
+
+        return grad * (-lr)
+
+    @torch.no_grad()
     def step(self, closure=None):
+        """Performs a single optimization step.
 
+        Args:
+            closure (Callable, optional): A closure that reevaluates the model
+                and returns the loss.
+        """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
-            weight_decay = group["weight_decay"]
-            momentum = group["momentum"]
-
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                d_p = p.grad.data
-                if weight_decay != 0:
-                    d_p.add_(p.data, alpha=weight_decay)
-                if momentum != 0:
-                    # Signum
-                    param_state = self.state[p]
-                    if "momentum_buffer" not in param_state:
-                        buf = param_state["momentum_buffer"] = torch.zeros_like(p.data)
 
-                    else:
-                        buf = param_state["momentum_buffer"]
+                grad = p.grad
+                state = self.state[p]
 
-                    buf.mul_(momentum).add_(d_p, alpha=(1 - momentum))
-                    d_p = torch.sign(buf)
-                else:
-                    # signSGD
-                    d_p = torch.sign(d_p)
+                if group["weight_decay"] != 0:
+                    grad = grad.add(p, alpha=group["weight_decay"])
 
-                p.data.add_(d_p, alpha=-group["lr"])
+                if len(state) == 0:
+                    self._init_state(example=p, state=state)
+                    if not group["momentum"]:
+                        state.pop("momentum_buffer", None)
+
+                state["step"] += 1
+
+                update = self._compute_update(
+                    grad,
+                    state,
+                    group["lr"],
+                    group["momentum"],
+                    group["nesterov"],
+                    group["dampening"],
+                    group["sign_update"],
+                )
+
+                p.add_(update)
 
         return loss

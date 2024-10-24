@@ -109,7 +109,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--normalize_grads", default=False, type=bool)
     parser.add_argument("--soap_data_format", default="channels_first", type=str)
     parser.add_argument("--correct_bias", default=True, type=bool)
-    parser.add_argument("--nesterov", default=True, type=bool)
+    parser.add_argument("--nesterov", default=False, type=bool)
     parser.add_argument("--muon_backend", default="newtonschulz5", type=str)
     parser.add_argument("--muon_backend_steps", default=5, type=int)
     parser.add_argument("--adema_beta3", default=0.9, type=float)
@@ -120,6 +120,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--weight_lr_power", default=2.0, type=float)
     parser.add_argument("--model_sharding", default=None, type=bool)
     parser.add_argument("--adam_mini_verbose", default=False, type=bool)
+    parser.add_argument("--dampening", default=0.0, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

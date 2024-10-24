@@ -64,7 +64,7 @@ parser.add_argument('--precondition_1d', default=False, type=bool)
 parser.add_argument('--normalize_grads', default=False, type=bool)
 parser.add_argument('--soap_data_format', default='channels_first', type=str)
 parser.add_argument('--correct_bias', default=True, type=bool)
-parser.add_argument('--nesterov', default=True, type=bool) # whether to use Nesterov-style momentum 
+parser.add_argument('--nesterov', default=False, type=bool) # whether to use Nesterov-style momentum 
 parser.add_argument('--muon_backend', default='newtonschulz5', type=str) # the chosen backend for the orthogonalization step
 parser.add_argument('--muon_backend_steps', default=5, type=int) # the number of iteration steps to use in the muon_backend, if it is iterative
 parser.add_argmunet('--adema_beta3', default=0.9, type=float) # beta3 in AdEMAMix
@@ -76,6 +76,7 @@ parser.add_argument('--weight_lr_power', default=2.0, type=float) # schedulefree
 parser.add_argument('--model_sharding', default=None, type=bool) # Adam-mini
 parser.add_argument('--adam_mini_verbose', default=False, type=bool) # print all the logs if true
 parser.add_argument('--log_interval', default=50, type=int)
+parser.add_argument('--dampening', default=0.0, type=float)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

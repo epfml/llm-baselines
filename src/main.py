@@ -145,7 +145,7 @@ def main(args, parser):
             group_specs,
             lr=args.lr,
             momentum=args.momentum,
-            nesterov=args.nesterov,
+            nesterov=args.nesterov,  # use True for Muon as a default
             backend=args.muon_backend,
             backend_steps=args.muon_backend_steps,
             # rank=args.rank,
@@ -216,15 +216,21 @@ def main(args, parser):
         opt = Signum(
             group_specs,
             lr=args.lr,
-            momentum=0.0,
+            momentum=0.0,  # always use zero momentum because its signSGD
+            dampening=args.dampening,
             weight_decay=args.weight_decay,
+            nesterov=args.nesterov,
+            sign_update=True,
         )
     elif args.opt == "signum":
         opt = Signum(
             group_specs,
             lr=args.lr,
-            momuntum=args.momentum,
+            momentum=args.momentum,
             weight_decay=args.weight_decay,
+            dampening=args.dampening,
+            nesterov=args.nesterov,
+            sign_update=True,
         )
     else:
         opt = torch.optim.SGD(
@@ -232,6 +238,7 @@ def main(args, parser):
             lr=args.lr,
             momentum=args.momentum,
             weight_decay=args.weight_decay,
+            nesterov=args.nesterov,
         )
     print(f"\nOptimizer:\n{opt}")
 
