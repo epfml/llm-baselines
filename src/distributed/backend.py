@@ -1,4 +1,3 @@
-
 from typing import List
 
 
@@ -10,7 +9,9 @@ class DistributedBackend(object):
     def transform_model(self, model):
         raise NotImplementedError
 
-    def get_context_for_microstep_forward(self, model, microstep_idx, gradient_accumulation_steps):
+    def get_context_for_microstep_forward(
+        self, model, microstep_idx, gradient_accumulation_steps
+    ):
         raise NotImplementedError
 
     def is_master_process(self) -> bool:
@@ -29,7 +30,4 @@ class DistributedBackend(object):
         raise NotImplementedError
 
     def finalize(self):
-        pass
-
-    def sync(self):
         pass
