@@ -88,6 +88,8 @@ def parse_args(base_parser, args, namespace):
             "sf-adamw",
             "sf-sgd",
             "adam-mini",
+            "signsgd",
+            "signum",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -173,6 +175,7 @@ def parse_args(base_parser, args, namespace):
         default=256,
         type=int,
     )
+    parser.add_argument("--n_kv_head", default=None, type=int)  # for Adam-mini
     parser.add_argument("--rmsnorm_eps", default=1e-5, type=float)
     parser.add_argument(
         "--dtype",

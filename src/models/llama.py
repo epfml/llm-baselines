@@ -9,6 +9,7 @@ import tiktoken
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
 from models.base import CausalSelfAttention, GPTBase
 
 

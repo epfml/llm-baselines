@@ -1,6 +1,7 @@
 import os
-import zipfile
 import urllib
+import zipfile
+
 import numpy as np
 import tiktoken
 

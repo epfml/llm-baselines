@@ -1,17 +1,16 @@
+import logging
 import os
 import tarfile
-import logging
-from pathlib import Path
-from typing import Optional
 from multiprocessing import Pool
+from pathlib import Path
+from subprocess import PIPE, Popen, TimeoutExpired
 from tempfile import NamedTemporaryFile
-from subprocess import Popen, TimeoutExpired, PIPE
-from typing import Tuple, List
+from typing import List, Optional, Tuple
 
 import numpy as np
 import requests
-from tqdm.auto import tqdm
 import tiktoken
+from tqdm.auto import tqdm
 
 
 def convert_to_markdown(args: Tuple[Path, Path]):

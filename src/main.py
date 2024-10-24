@@ -22,6 +22,7 @@ from optim.base import train
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
+from optim.sign import Signum
 from optim.soap import SOAP
 from optim.utils import cos_inf_schedule, wsd_schedule
 
@@ -111,7 +112,7 @@ def main(args, parser):
     args.world_size = distributed_backend.get_world_size()
 
     if args.opt == "adamw":
-        device_type = 'cuda' if 'cuda' in args.device else 'cpu'
+        device_type = "cuda" if "cuda" in args.device else "cpu"
         use_fused = (device_type == "cuda") and (
             "fused" in inspect.signature(torch.optim.AdamW).parameters
         )
@@ -210,6 +211,20 @@ def main(args, parser):
             n_heads=args.n_head,
             n_kv_heads=args.n_kv_head,
             verbose=args.adam_mini_verbose,
+        )
+    elif args.opt == "signsgd":
+        opt = Signum(
+            group_specs,
+            lr=args.lr,
+            momentum=0.0,
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt == "signum":
+        opt = Signum(
+            group_specs,
+            lr=args.lr,
+            momuntum=args.momentum,
+            weight_decay=args.weight_decay,
         )
     else:
         opt = torch.optim.SGD(
@@ -325,22 +340,41 @@ def get_data_readers(args, verbose=True):
     }
 
 
-def get_exp_name(args, parser, distributed_backend, key_args=['model', 'dataset', 'opt'], ignore_args=['eval_interval', 'full_eval_at', 'distributed_backend', 'latest_ckpt_interval', 'wandb', 'wandb_project', 'wandb_entity', 'batch_size', 'acc_steps', 'results_base_folder', 'run_prefix', 'wandb_run_prefix']):
+def get_exp_name(
+    args,
+    parser,
+    distributed_backend,
+    key_args=["model", "dataset", "opt"],
+    ignore_args=[
+        "eval_interval",
+        "full_eval_at",
+        "distributed_backend",
+        "latest_ckpt_interval",
+        "wandb",
+        "wandb_project",
+        "wandb_entity",
+        "batch_size",
+        "acc_steps",
+        "results_base_folder",
+        "run_prefix",
+        "wandb_run_prefix",
+    ],
+):
     # Get the default values
     defaults = vars(parser.parse_args([]))
 
     rank = distributed_backend.rank
-    
+
     # Generate the prefix with key arguments
     prefix_parts = []
     for key in key_args:
         if hasattr(args, key):
             value = getattr(args, key)
             prefix_parts.append(f"{key}-{value}")
-    
+
     prefix = "_".join(prefix_parts)
     prefix = f"{args.batch_size}x{args.acc_steps}(rank={rank})_" + prefix
-    
+
     # Generate the rest of the string with non-default arguments
     non_default_parts = []
     for key, value in vars(args).items():
@@ -351,18 +385,18 @@ def get_exp_name(args, parser, distributed_backend, key_args=['model', 'dataset'
             continue
         if key not in key_args and value != defaults[key]:
             non_default_parts.append(f"{key}-{value}")
-    
+
     non_default_string = "_".join(non_default_parts)
 
     if args.run_prefix is not None:
         prefix = args.run_prefix + "_" + prefix
-    
+
     # Combine prefix and non-default string
     if non_default_string:
         return f"{prefix}__{non_default_string}"
     else:
         return prefix
-      
+
 
 if __name__ == "__main__":
     args, parser = get_args()

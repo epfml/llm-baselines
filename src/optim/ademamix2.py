@@ -177,7 +177,10 @@ class AdEMAMix2(torch.optim.Optimizer):
 
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
 
-                update = exp_avg_fast.div(bias_correction1) / denom  + alpha * exp_avg_slow / exp_avg_slow.norm()
+                update = (
+                    exp_avg_fast.div(bias_correction1) / denom
+                    + alpha * exp_avg_slow / exp_avg_slow.norm()
+                )
 
                 # decay
                 update.add_(p, alpha=lmbda)

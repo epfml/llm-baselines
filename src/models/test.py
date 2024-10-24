@@ -9,6 +9,7 @@ import tiktoken
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
 from models.base import CausalSelfAttention, GPTBase
 
 
@@ -204,7 +205,7 @@ class Test(GPTBase):
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
         # pos_emb = self.transformer.wpe(pos)
 
-        x = self.transformer.drop(tok_emb) # + pos_emb)
+        x = self.transformer.drop(tok_emb)  # + pos_emb)
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
         for block in self.transformer.h:

@@ -4,7 +4,6 @@ from string import ascii_letters, digits, punctuation
 import numpy as np
 import requests
 
-
 _char_decode = dict(
     enumerate(sorted(set(ascii_letters + digits + punctuation + " \n")))
 )
