@@ -21,10 +21,11 @@ from optim.ademamix2 import AdEMAMix2
 from optim.base import train
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
+from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
+                            wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sign import Signum
 from optim.soap import SOAP
-from optim.utils import cos_inf_schedule, wsd_schedule
 
 
 def get_args():
@@ -278,6 +279,17 @@ def main(args, parser):
                 fract_decay=args.wsd_fract_decay,
                 init_div_factor=1e2,
                 final_lr_factor=args.wsd_final_lr_scale,  # should be 0 here
+                decay_type=args.decay_type,
+            )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+        elif args.scheduler == "cos_wsd":
+            lambda_schedule = cosine_wsd_decay_schedule(
+                n_iterations=args.iterations,
+                n_warmup=args.warmup_steps,
+                anneal_end_factor=0.15,  # 0.2
+                fract_decay=args.wsd_fract_decay,
+                init_div_factor=1e2,
+                final_lr_factor=0.1,  # should be 0 here
                 decay_type=args.decay_type,
             )
             scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)

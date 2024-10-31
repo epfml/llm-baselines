@@ -51,7 +51,7 @@ parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
