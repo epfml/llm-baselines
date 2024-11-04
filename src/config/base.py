@@ -90,6 +90,8 @@ def parse_args(base_parser, args, namespace):
             "adam-mini",
             "signsgd",
             "signum",
+            "sgdf",
+            "prodigy",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -121,6 +123,11 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--model_sharding", default=None, type=bool)
     parser.add_argument("--adam_mini_verbose", default=False, type=bool)
     parser.add_argument("--dampening", default=0.0, type=float)
+    parser.add_argument("--prodigy_beta3", default=None, type=float)
+    parser.add_argument("--prodigy_decouple", default=True, type=bool)
+    parser.add_argument("--prodigy_use_bias_correction", default=False, type=bool)
+    parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
+    parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

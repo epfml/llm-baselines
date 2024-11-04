@@ -21,9 +21,11 @@ from optim.ademamix2 import AdEMAMix2
 from optim.base import train
 from optim.lion import Lion
 from optim.muon import Muon, zeropower_backends
+from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
+from optim.sgdf import SGDF
 from optim.sign import Signum
 from optim.soap import SOAP
 
@@ -149,9 +151,7 @@ def main(args, parser):
             nesterov=args.nesterov,  # use True for Muon as a default
             backend=args.muon_backend,
             backend_steps=args.muon_backend_steps,
-            # rank=args.rank,
-            # world_size=args.world_size,
-        )  # i have left rank and world_size inside Muon
+        )
     elif args.opt == "ademamix":
         opt = AdEMAMix(
             group_specs,
@@ -232,6 +232,25 @@ def main(args, parser):
             dampening=args.dampening,
             nesterov=args.nesterov,
             sign_update=True,
+        )
+    elif args.opt == "sgdf":
+        opt = SGDF(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt == "prodigy":
+        opt = Prodigy(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            beta3=args.prodigy_beta3,
+            weight_decay=args.weight_decay,
+            decouple=args.prodigy_decouple,
+            use_bias_correction=args.prodigy_use_bias_correction,
+            safeguard_warmup=args.prodigy_safeguard_warmup,
+            fsdp_in_use=args.prodigy_fsdp_in_use,
         )
     else:
         opt = torch.optim.SGD(
