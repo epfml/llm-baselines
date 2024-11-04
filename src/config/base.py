@@ -90,6 +90,7 @@ def parse_args(base_parser, args, namespace):
             "adam-mini",
             "signsgd",
             "signum",
+            "sgdf",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)

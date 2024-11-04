@@ -24,6 +24,7 @@ from optim.muon import Muon, zeropower_backends
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
+from optim.sgdf import SGDF
 from optim.sign import Signum
 from optim.soap import SOAP
 
@@ -232,6 +233,13 @@ def main(args, parser):
             dampening=args.dampening,
             nesterov=args.nesterov,
             sign_update=True,
+        )
+    elif args.opt == "sgdf":
+        opt = SGDF(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
         )
     else:
         opt = torch.optim.SGD(
