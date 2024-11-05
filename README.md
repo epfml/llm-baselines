@@ -83,7 +83,7 @@ parser.add_argument("--prodigy_use_bias_correction", default=False, type=bool)
 parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool) # Remove lr from the denominator of D estimate to avoid issues during warm-up stage. Off by default.
 parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
 # Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb'])
+parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
