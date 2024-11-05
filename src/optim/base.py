@@ -99,6 +99,7 @@ def train(
             or (curr_iter in cfg.full_eval_at)
         ):
             eval_and_log(
+                tokens,
                 curr_iter,
                 epoch,
                 model,
@@ -169,6 +170,7 @@ def train(
             if cfg.wandb:
                 wandb.log(
                     {
+                        "tokens": tokens,
                         "iter": curr_iter,
                         "train/loss": train_loss,
                         "train/perplexity": 2.71828**train_loss,
@@ -187,6 +189,7 @@ def train(
 
 
 def eval_and_log(
+    tokens,
     curr_iter,
     epoch,
     model,
@@ -232,6 +235,7 @@ def eval_and_log(
     if cfg.wandb:
         if curr_iter == cfg.iterations or full_eval:
             logs = {
+                "tokens": tokens,
                 "iter": curr_iter,
                 "final-val/loss": val_loss,
                 "final-val/perplexity": val_perplexity,
@@ -239,6 +243,7 @@ def eval_and_log(
             }
         else:
             logs = {
+                "tokens": tokens,
                 "iter": curr_iter,
                 "val/loss": val_loss,
                 "val/perplexity": val_perplexity,
