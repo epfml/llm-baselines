@@ -51,7 +51,7 @@ parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
@@ -77,11 +77,12 @@ parser.add_argument('--model_sharding', default=None, type=bool) # Adam-mini
 parser.add_argument('--adam_mini_verbose', default=False, type=bool) # print all the logs if true
 parser.add_argument('--log_interval', default=50, type=int)
 parser.add_argument('--dampening', default=0.0, type=float)
-parser.add_argument("--prodigy_beta3", default=None, type=float) # coefficients for computing the Prodidy stepsize using running averages
-parser.add_argument("--prodigy_decouple", default=True, type=bool) # Use AdamW style decoupled weight decay
-parser.add_argument("--prodigy_use_bias_correction", default=False, type=bool)
-parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool) # Remove lr from the denominator of D estimate to avoid issues during warm-up stage. Off by default.
-parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
+parser.add_argument('--prodigy_beta3', default=None, type=float) # coefficients for computing the Prodidy stepsize using running averages
+parser.add_argument('--prodigy_decouple', default=True, type=bool) # Use AdamW style decoupled weight decay
+parser.add_argument('--prodigy_use_bias_correction', default=False, type=bool)
+parser.add_argument('--prodigy_safeguard_warmup', default=False, type=bool) # Remove lr from the denominator of D estimate to avoid issues during warm-up stage. Off by default.
+parser.add_argument('--prodigy_fsdp_in_use', default=False, type=bool)
+parser.add_argument('--sophia_rho', default=0.04, type=float)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

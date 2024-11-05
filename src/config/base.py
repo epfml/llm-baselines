@@ -92,6 +92,7 @@ def parse_args(base_parser, args, namespace):
             "signum",
             "sgdf",
             "prodigy",
+            "sophiag",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -128,6 +129,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--prodigy_use_bias_correction", default=False, type=bool)
     parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
     parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
+    parser.add_argument("--sophia_rho", default=0.04, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

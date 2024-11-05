@@ -28,7 +28,7 @@ from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgdf import SGDF
 from optim.sign import Signum
 from optim.soap import SOAP
-
+from optim.sophia import SophiaG 
 
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -251,6 +251,14 @@ def main(args, parser):
             use_bias_correction=args.prodigy_use_bias_correction,
             safeguard_warmup=args.prodigy_safeguard_warmup,
             fsdp_in_use=args.prodigy_fsdp_in_use,
+        )
+    elif args.opt == "sophiag":
+        opt = SophiaG(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            rho = args.sophia_rho,
         )
     else:
         opt = torch.optim.SGD(
