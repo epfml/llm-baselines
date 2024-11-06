@@ -268,11 +268,19 @@ class DistributedShampoo(torch.optim.Optimizer):
                 # Safe inversion with added epsilon to diagonal
                 if not torch.isfinite(pc1).all() or not torch.isfinite(pc2).all():
                     raise RuntimeError("Matrix contains NaN or Inf values.")
-                inv_pc1 = torch.inverse(
+                # inv_pc1 = torch.inverse(
+                #     pc1
+                #     + torch.eye(pc1.size(0), device=pc1.device, dtype=pc1.dtype) * eps
+                # ).sqrt()
+                # inv_pc2 = torch.inverse(
+                #     pc2
+                #     + torch.eye(pc2.size(1), device=pc2.device, dtype=pc2.dtype) * eps
+                # ).sqrt()
+                inv_pc1 = torch.linalg.inv(
                     pc1
                     + torch.eye(pc1.size(0), device=pc1.device, dtype=pc1.dtype) * eps
                 ).sqrt()
-                inv_pc2 = torch.inverse(
+                inv_pc2 = torch.linalg.inv(
                     pc2
                     + torch.eye(pc2.size(1), device=pc2.device, dtype=pc2.dtype) * eps
                 ).sqrt()
