@@ -146,11 +146,9 @@ def train(
         opt.step()
         if cfg.scheduler != "none":
             scheduler.step()
-        if cfg.opt == "sophia":
+        if cfg.opt == "sophiag":
             opt.zero_grad(set_to_none=True)
-            if curr_iter % 10 != 10 - 1:
-                continue
-            else:
+            if curr_iter % 10 == 10 - 1:
                 samp_dist = torch.distributions.Categorical(logits=outputs["logits"])
                 y_sample = samp_dist.sample()
                 loss_sampled = torch.nn.functional.cross_entropy(
