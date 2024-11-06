@@ -19,8 +19,10 @@ from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
 from optim.base import train
+# from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
+# from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
-from optim.muon import Muon, zeropower_backends
+from optim.muon import CombinedOptimizer, Muon
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
@@ -146,13 +148,24 @@ def main(args, parser):
             correct_bias=args.correct_bias,
         )
     elif args.opt == "muon":
-        opt = Muon(
+        opt = CombinedOptimizer(
             group_specs,
-            lr=args.lr,
-            momentum=args.momentum,
-            nesterov=args.nesterov,  # use True for Muon as a default
-            backend=args.muon_backend,
-            backend_steps=args.muon_backend_steps,
+            [Muon, torch.optim.AdamW],
+            [
+                {
+                    "lr": args.muon_lr_factor * args.lr,
+                    "momentum": args.momentum,
+                    "nesterov": args.nesterov,
+                    "backend": args.muon_backend,
+                    "backend_steps": args.muon_backend_steps,
+                },
+                {
+                    "lr": args.lr,
+                    "betas": (args.beta1, args.beta2),
+                    "weight_decay": args.weight_decay,
+                    "fused": True,
+                },
+            ],
         )
     elif args.opt == "ademamix":
         opt = AdEMAMix(
@@ -267,8 +280,13 @@ def main(args, parser):
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2),
-            shampoo_decay=args.momentum,  # decay rate for Shampoo preconditioners with the momentum constant
+            precondition_frequency=args.precondition_frequency,
             weight_decay=args.weight_decay,
+            use_decoupled_weight_decay=True,
+            # grafting_config=AdamGraftingConfig(
+            #     beta2=args.beta2,  # oroginally, the default value is 0.999
+            #     epsilon=1e-8,
+            # ),
         )
     else:
         opt = torch.optim.SGD(
