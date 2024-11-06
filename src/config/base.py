@@ -93,6 +93,7 @@ def parse_args(base_parser, args, namespace):
             "sgdf",
             "prodigy",
             "sophiag",
+            "shampoo",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)

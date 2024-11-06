@@ -26,9 +26,11 @@ from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgdf import SGDF
+from optim.shampoo import DistributedShampoo
 from optim.sign import Signum
 from optim.soap import SOAP
-from optim.sophia import SophiaG 
+from optim.sophia import SophiaG
+
 
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -258,7 +260,15 @@ def main(args, parser):
             lr=args.lr,
             betas=(args.beta1, args.beta2),
             weight_decay=args.weight_decay,
-            rho = args.sophia_rho,
+            rho=args.sophia_rho,
+        )
+    elif args.opt == "shampoo":
+        opt = DistributedShampoo(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            shampoo_decay=args.momentum,  # decay rate for Shampoo preconditioners with the momentum constant
+            weight_decay=args.weight_decay,
         )
     else:
         opt = torch.optim.SGD(

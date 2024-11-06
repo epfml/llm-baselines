@@ -1,3 +1,8 @@
+"""
+Here is an original implementation of SophiaG. 
+Source: https://github.com/Liuhong99/Sophia
+"""
+
 from typing import List
 
 import torch

@@ -153,13 +153,18 @@ def train(
             else:
                 samp_dist = torch.distributions.Categorical(logits=outputs["logits"])
                 y_sample = samp_dist.sample()
-                loss_sampled = torch.nn.functional.cross_entropy(outputs["logits"].view(-1, outputs["logits"].size(-1)), y_sample.view(-1), ignore_index=-1)
+                loss_sampled = torch.nn.functional.cross_entropy(
+                    outputs["logits"].view(-1, outputs["logits"].size(-1)),
+                    y_sample.view(-1),
+                    ignore_index=-1,
+                )
                 loss_sampled.backward()
                 opt.update_hessian()
                 opt.zero_grad(set_to_none=True)
                 model.zero_grad()
         else:
             opt.zero_grad(set_to_none=True)
+        # opt.zero_grad(set_to_none=True)
         dt = (time.perf_counter_ns() - t_start) / 1e9
 
         curr_iter += 1

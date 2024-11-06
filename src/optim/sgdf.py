@@ -1,3 +1,8 @@
+"""
+Here is an original implementation of SGDF. 
+Source: https://arxiv.org/abs/2311.02818
+"""
+
 import torch
 
 
