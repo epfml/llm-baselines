@@ -9,8 +9,14 @@ import yaml
 import wandb
 
 # from logger.logger import DynamicsLogger
-from .utils import (eval, get_batch, load_checkpoint, load_worker_state,
-                    save_checkpoint, save_worker_state)
+from .utils import (
+    eval,
+    get_batch,
+    load_checkpoint,
+    load_worker_state,
+    save_checkpoint,
+    save_worker_state,
+)
 
 
 def train(
@@ -144,14 +150,16 @@ def train(
 
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
-        opt.step() if cfg.opt != "sophiag" else opt.step(bs=tokens)
+        opt.step() if cfg.opt != "sophiag" else opt.step(bs=480 * cfg.sequence_length)
         if cfg.scheduler != "none":
             scheduler.step()
         if cfg.opt == "sophiag":
             opt.zero_grad(set_to_none=True)
             if curr_iter % 10 == 10 - 1:
                 sample_again = model(x, targets=y, get_logits=True)
-                samp_dist = torch.distributions.Categorical(logits=sample_again["logits"])
+                samp_dist = torch.distributions.Categorical(
+                    logits=sample_again["logits"]
+                )
                 y_sample = samp_dist.sample()
                 loss_sampled = torch.nn.functional.cross_entropy(
                     sample_again["logits"].view(-1, sample_again["logits"].size(-1)),

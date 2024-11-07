@@ -94,6 +94,7 @@ def parse_args(base_parser, args, namespace):
             "prodigy",
             "sophiag",
             "shampoo",
+            "adopt",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -149,8 +150,8 @@ def parse_args(base_parser, args, namespace):
             "slimpajama",
             "slimpajama_chunk1",
             "redpajamav2",
-            "fineweb",  
-            "finewebedu", 
+            "fineweb",
+            "finewebedu",
         ],
     )
     parser.add_argument(
