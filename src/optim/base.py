@@ -144,10 +144,27 @@ def train(
 
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
-        opt.step()
+        opt.step() if cfg.opt != "sophiag" else opt.step(bs=tokens)
         if cfg.scheduler != "none":
             scheduler.step()
-        opt.zero_grad(set_to_none=True)
+        if cfg.opt == "sophiag":
+            opt.zero_grad(set_to_none=True)
+            if curr_iter % 10 == 10 - 1:
+                sample_again = model(x, targets=y, get_logits=True)
+                samp_dist = torch.distributions.Categorical(logits=sample_again["logits"])
+                y_sample = samp_dist.sample()
+                loss_sampled = torch.nn.functional.cross_entropy(
+                    sample_again["logits"].view(-1, sample_again["logits"].size(-1)),
+                    y_sample.view(-1),
+                    ignore_index=-1,
+                )
+                (loss_sampled / cfg.acc_steps).backward()
+                opt.update_hessian()
+                opt.zero_grad(set_to_none=True)
+                model.zero_grad()
+        else:
+            opt.zero_grad(set_to_none=True)
+        # opt.zero_grad(set_to_none=True)
         dt = (time.perf_counter_ns() - t_start) / 1e9
 
         curr_iter += 1

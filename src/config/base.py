@@ -92,6 +92,8 @@ def parse_args(base_parser, args, namespace):
             "signum",
             "sgdf",
             "prodigy",
+            "sophiag",
+            "shampoo",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -114,6 +116,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--nesterov", default=False, type=bool)
     parser.add_argument("--muon_backend", default="newtonschulz5", type=str)
     parser.add_argument("--muon_backend_steps", default=5, type=int)
+    parser.add_argument("--muon_lr_factor", default=0.1, type=float)
     parser.add_argument("--adema_beta3", default=0.9, type=float)
     parser.add_argument("--adema_alpha", default=2.0, type=float)
     parser.add_argument("--adema_beta3_warmup", default=None, type=int)
@@ -128,6 +131,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--prodigy_use_bias_correction", default=False, type=bool)
     parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
     parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
+    parser.add_argument("--sophia_rho", default=0.04, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
