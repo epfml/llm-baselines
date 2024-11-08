@@ -2,14 +2,14 @@ import math
 import os
 from contextlib import contextmanager
 
-from torch.distributed import destroy_process_group, get_world_size, init_process_group
+from torch.distributed import (destroy_process_group, get_world_size,
+                               init_process_group)
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from .backend import DistributedBackend
 
 
 class DataParallelDistributedBackend(DistributedBackend):
-
     def __init__(self, args):
         self.rank = int(os.environ.get("RANK", -1))
         assert self.rank != -1, "DDP backend can not be used without rank"

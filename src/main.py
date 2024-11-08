@@ -9,16 +9,18 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import wandb
 
 import config
 import distributed
-import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
 from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
 from optim.base import train
+from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
+                           AdamClipDelayedEta)
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
@@ -50,7 +52,6 @@ def get_args():
 
 
 def main(args, parser):
-
     distributed_backend = distributed.make_backend_from_args(args)
     args = distributed_backend.get_adjusted_args_for_process(args)
     args.world_size = distributed_backend.get_world_size()
@@ -288,6 +289,44 @@ def main(args, parser):
             #     epsilon=1e-8,
             # ),
         )
+    elif args.opt == "adopt":
+        raise NotImplementedError("Have not implemented yet")
+    elif args.opt in [
+        "clip-adagrad",
+        "clip-adagrad-delay-eta",
+        "clip-adam",
+        "clip-adam-delay-eta",
+    ]:
+        clipped_adagrad_cfg = {
+            "lr": args.lr,
+            "eps": 1e-8,
+            "weight_decay": args.weight_decay,
+            "clipping": args.clipping_type,
+            "max_grad_norm": 1.0,
+        }
+        if args.opt == "clip-adagrad":
+            opt = AdagradClip(**clipped_adagrad_cfg)
+        clipped_adagrad_delay_eta_cfg = {
+            **clipped_adagrad_cfg,
+            "exp_avg_sq_value": 0.0001,
+            "etta": args.clipping_eta,
+        }
+        if args.opt == "clip-adagrad-delay-eta":
+            opt = AdaGradClipDelayedEta(**clipped_adagrad_delay_eta_cfg)
+        clipped_adam_cfg = {
+            **clipped_adagrad_cfg,
+            "betas": (args.beta1, args.beta2),
+            "correct_bias": args.correct_bias,
+        }
+        if args.opt == "clip-adam":
+            opt = AdamClip(**clipped_adam_cfg)
+        clipped_adam_delay_eta_cfg = {
+            **clipped_adam_cfg,
+            "exp_avg_sq_value": 0.00001,
+            "etta": args.clipping_eta,
+        }
+        if args.opt == "clip-adam-delay-eta":
+            opt = AdamClipDelayedEta(**clipped_adam_delay_eta_cfg)
     else:
         opt = torch.optim.SGD(
             group_specs,

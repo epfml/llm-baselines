@@ -90,9 +90,7 @@ class Muon(torch.optim.Optimizer):
         super().__init__(params, defaults)
 
     def step(self):
-
         for group in self.param_groups:
-
             lr = group["lr"]
             momentum = group["momentum"]
             zeropower_backend = zeropower_backends[group["backend"]]
@@ -149,9 +147,12 @@ def separate_params(param_groups):
             param_groups = [param_groups]
         # param_groups is a list of dicts
         for group in param_groups:
-            params_2d, params_non2d, param_2d_count, param_non2d_count = (
-                separate_params(group["params"])
-            )
+            (
+                params_2d,
+                params_non2d,
+                param_2d_count,
+                param_non2d_count,
+            ) = separate_params(group["params"])
             param_group_2d = {"params": params_2d}
             param_group_non2d = {"params": params_non2d}
             # Copy the group dict and replace the 'params' key with the separated params

@@ -16,7 +16,6 @@ def linear_warmup_scheduler(step, alpha_end, alpha_start=0, warmup=1):
 
 
 def linear_hl_warmup_scheduler(step, beta_end, beta_start=0, warmup=1):
-
     def f(beta, eps=1e-8):
         return math.log(0.5) / math.log(beta + eps) - 1
 
@@ -100,7 +99,6 @@ class AdEMAMix(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-
             lr = group["lr"]
             lmbda = group["weight_decay"]
             eps = group["eps"]

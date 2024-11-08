@@ -52,7 +52,6 @@ class Signum(torch.optim.Optimizer):
     def _compute_update(
         self, grad, state, lr, momentum, nesterov, dampening, sign_update, **kwargs
     ):
-
         if momentum != 0:  # Signum check
             buf = state["momentum_buffer"]
             buf.mul_(momentum).add_(grad, alpha=1 - dampening)

@@ -62,7 +62,6 @@ class AdamWScheduleFree(torch.optim.Optimizer):
         weight_lr_power: float = 2.0,
         foreach: Optional[bool] = hasattr(torch, "_foreach_mul_"),
     ):
-
         defaults = dict(
             lr=lr,
             betas=betas,

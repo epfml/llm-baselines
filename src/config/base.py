@@ -95,6 +95,10 @@ def parse_args(base_parser, args, namespace):
             "sophiag",
             "shampoo",
             "adopt",
+            "clip-adagrad",
+            "clip-adagrad-delay-eta",
+            "clip-adam",
+            "clip-adam-delay-eta",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -133,6 +137,10 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
     parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
     parser.add_argument("--sophia_rho", default=0.04, type=float)
+    parser.add_argument(
+        "--clipping_type", default="no", choices=["no", "local", "elementwise"]
+    )
+    parser.add_argument("--clip_eta", default=1.0, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

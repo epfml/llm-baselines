@@ -93,7 +93,6 @@ class LlamaMLP(nn.Module):
 
 
 class LlamaAttention(CausalSelfAttention):
-
     def forward(self, x, freqs_cis):
         # batch size, sequence length, embedding dimensionality (n_embd)
         (
