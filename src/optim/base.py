@@ -4,8 +4,9 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import torch
-import wandb
 import yaml
+
+import wandb
 
 # from logger.logger import DynamicsLogger
 from .utils import (eval, get_batch, load_checkpoint, load_worker_state,

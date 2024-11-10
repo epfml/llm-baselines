@@ -9,10 +9,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import wandb
 
 import config
 import distributed
+import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
 from optim.adammini import Adam_mini
@@ -24,7 +24,7 @@ from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
-from optim.muon import CombinedOptimizer, Muon
+from optim.muon import Muon, separate_params
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
@@ -149,24 +149,20 @@ def main(args, parser):
             correct_bias=args.correct_bias,
         )
     elif args.opt == "muon":
-        opt = CombinedOptimizer(
-            group_specs,
-            [Muon, torch.optim.AdamW],
-            [
-                {
-                    "lr": args.muon_lr_factor * args.lr,
-                    "momentum": args.momentum,
-                    "nesterov": args.nesterov,
-                    "backend": args.muon_backend,
-                    "backend_steps": args.muon_backend_steps,
-                },
-                {
-                    "lr": args.lr,
-                    "betas": (args.beta1, args.beta2),
-                    "weight_decay": args.weight_decay,
-                    "fused": True,
-                },
-            ],
+        param_groups_2d, param_groups_non2d, _, _ = separate_params(group_specs)
+        print(len(param_groups_2d))
+        print(len(param_groups_non2d))
+        opt = Muon(
+            muon_params=param_groups_2d[0]["params"],
+            lr=args.muon_lr_factor,  # since adamw_lr_ration = adamw_lr / muon_lr
+            momentum=args.momentum,
+            nesterov=args.nesterov,  # always use nesterov momentum for Muon
+            ns_steps=args.muon_ns_steps,
+            adamw_params=param_groups_non2d[0]["params"],
+            adamw_lr=args.lr,
+            adamw_betas=(args.beta1, args.beta2),
+            adamw_eps=1e-8,
+            adamw_wd=args.weight_decay,
         )
     elif args.opt == "ademamix":
         opt = AdEMAMix(

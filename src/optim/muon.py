@@ -9,11 +9,6 @@ import torch
 import torch.distributed as dist
 
 
-def zeropower_via_svd(G, steps=None):
-    U, S, V = G.svd()
-    return U @ V.T
-
-
 @torch.compile
 def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
     """
@@ -33,16 +28,11 @@ def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
         X = X.T
     for _ in range(steps):
         A = X @ X.T
-        B = A @ X
-        X = a * X + b * B + c * A @ B
+        B = b * A + c * A @ A
+        X = a * X + B @ X
     if G.size(0) > G.size(1):
         X = X.T
     return X
-
-
-zeropower_backends = dict(
-    svd=zeropower_via_svd, newtonschulz5=zeropower_via_newtonschulz5
-)
 
 
 class Muon(torch.optim.Optimizer):
@@ -55,56 +45,96 @@ class Muon(torch.optim.Optimizer):
     the advantage that it can be stably run in bfloat16 on the GPU.
 
     Some warnings:
-    - This optimizer assumes that all parameters passed in are 2D.
-    - It should not be used for the embedding layer, the final fully connected layer, or any {0,1}-D
-    parameters; those should all be optimized by a standard method (e.g., AdamW).
-    - To use it with 4D convolutional filters, it works well to just flatten their last 3 dimensions.
-    - We believe it is unlikely to work well for training with small batch size.
+    - We believe this optimizer is unlikely to work well for training with small batch size.
     - We believe it may not work well for finetuning pretrained models, but we haven't tested this.
-    - We have not yet tried this optimizer for training scenarios larger than NanoGPT (124M).
 
     Arguments:
-        lr: The learning rate used by the internal SGD.
-        momentum: The momentum used by the internal SGD.
+        muon_params: The parameters to be optimized by Muon.
+        lr: The learning rate. The updates will have spectral norm of `lr`. (0.02 is a good default)
+        momentum: The momentum used by the internal SGD. (0.95 is a good default)
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
-        backend: The chosen backend for the orthogonalization step. (recommended: 'newtonschulz5')
-        backend_steps: The number of iteration steps to use in the backend, if it is iterative.
+        ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
+        adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
+        {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
+        adamw_lr: The learning rate for the internal AdamW.
+        adamw_betas: The betas for the internal AdamW.
+        adamw_eps: The epsilon for the internal AdamW.
+        adamw_wd: The weight decay for the internal AdamW.
     """
 
     def __init__(
         self,
-        params,
+        muon_params,
         lr=0.02,
         momentum=0.95,
         nesterov=True,
-        backend="newtonschulz5",
-        backend_steps=5,
+        ns_steps=6,
+        adamw_params=None,
+        adamw_lr=3e-4,
+        adamw_betas=(0.95, 0.95),
+        adamw_eps=1e-8,
+        adamw_wd=0,
     ):
+
         defaults = dict(
             lr=lr,
             momentum=momentum,
             nesterov=nesterov,
-            backend=backend,
-            backend_steps=backend_steps,
+            ns_steps=ns_steps,
+            adamw_lr_ratio=adamw_lr / lr,
+            adamw_betas=adamw_betas,
+            adamw_eps=adamw_eps,
+            adamw_wd=adamw_wd,
         )
+
+        params = list(muon_params)
+        adamw_params = list(adamw_params) if adamw_params is not None else []
+        params.extend(adamw_params)
         super().__init__(params, defaults)
 
+        # Sort parameters into those for which we will use Muon, and those for which we will not
+        for p in muon_params:
+            # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
+            if p.ndim >= 2 and p.size(0) < 10000:
+                self.state[p]["use_muon"] = True
+            # self.state[p]["use_muon"] = True
+            else:
+                self.state[p]["use_muon"] = False
+        for p in adamw_params:
+            # Do not use Muon for parameters in adamw_params
+            self.state[p]["use_muon"] = False
+
+        if "WORLD_SIZE" in os.environ:
+            self.world_size = int(os.environ["WORLD_SIZE"])
+            self.rank = int(os.environ["RANK"])
+        else:
+            self.world_size = 1
+            self.rank = 0
+
     def step(self):
+
         for group in self.param_groups:
+
+            ############################
+            #           Muon           #
+            ############################
+
+            params = [p for p in group["params"] if self.state[p]["use_muon"]]
             lr = group["lr"]
             momentum = group["momentum"]
-            zeropower_backend = zeropower_backends[group["backend"]]
 
             # generate weight updates in distributed fashion
-            total_params = sum(p.numel() for p in group["params"])
+            total_params = sum(p.numel() for p in params)
             updates_flat = torch.zeros(
                 total_params, device="cuda", dtype=torch.bfloat16
             )
             curr_idx = 0
-            for i, p in enumerate(group["params"]):
+            for i, p in enumerate(params):
                 # luckily this will perfectly distribute a transformer with multiple of 4 layers to 8 GPUs
-                if i % int(os.environ["WORLD_SIZE"]) == int(os.environ["RANK"]):
+                if i % self.world_size == self.rank:
                     g = p.grad
+                    if g.ndim > 2:
+                        g = g.view(g.size(0), -1)
                     assert g is not None
                     state = self.state[p]
                     if "momentum_buffer" not in state:
@@ -113,17 +143,18 @@ class Muon(torch.optim.Optimizer):
                     buf.mul_(momentum).add_(g)
                     if group["nesterov"]:
                         g = g.add(buf, alpha=momentum)
-                    g = zeropower_backend(g, steps=group["backend_steps"])
+                    g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
                     g *= max(1, g.size(0) / g.size(1)) ** 0.5
                     updates_flat[curr_idx : curr_idx + p.numel()] = g.flatten()
                 curr_idx += p.numel()
 
             # sync updates across devices. we are not memory-constrained so can do this simple deserialization
-            dist.all_reduce(updates_flat, op=dist.ReduceOp.SUM)
+            if self.world_size > 1:
+                dist.all_reduce(updates_flat, op=dist.ReduceOp.SUM)
 
             # deserialize and apply updates
             curr_idx = 0
-            for p in group["params"]:
+            for p in params:
                 g = (
                     updates_flat[curr_idx : curr_idx + p.numel()]
                     .view_as(p.data)
@@ -131,6 +162,41 @@ class Muon(torch.optim.Optimizer):
                 )
                 p.data.add_(g, alpha=-lr)
                 curr_idx += p.numel()
+
+            ############################
+            #       AdamW backup       #
+            ############################
+
+            params = [p for p in group["params"] if not self.state[p]["use_muon"]]
+            lr = (
+                group["adamw_lr_ratio"] * group["lr"]
+            )  # in order for lr schedule to work
+            beta1, beta2 = group["adamw_betas"]
+            eps = group["adamw_eps"]
+            weight_decay = group["adamw_wd"]
+
+            for p in params:
+                g = p.grad
+                assert g is not None
+                state = self.state[p]
+                if "step" not in state:
+                    state["step"] = 0
+                    state["moment1"] = torch.zeros_like(g)
+                    state["moment2"] = torch.zeros_like(g)
+                state["step"] += 1
+                step = state["step"]
+                buf1 = state["moment1"]
+                buf2 = state["moment2"]
+                buf1.lerp_(g, 1 - beta1)
+                buf2.lerp_(g.square(), 1 - beta2)
+
+                g = buf1 / (eps + buf2.sqrt())
+
+                bias_correction1 = 1 - beta1**step
+                bias_correction2 = 1 - beta2**step
+                scale = bias_correction1 / bias_correction2**0.5
+                p.data.mul_(1 - lr * weight_decay)
+                p.data.add_(g, alpha=-lr / scale)
 
 
 def separate_params(param_groups):
@@ -186,71 +252,3 @@ def separate_params(param_groups):
         return params_2d, params_non2d, len(params_2d), len(params_non2d)
     else:
         breakpoint()
-
-
-class CombinedOptimizer(torch.optim.Optimizer):
-    """
-# Note that CombinedOptimizer is not a torch.optim.Optimizer, but a wrapper around multiple optimizers.
-# Original Example:
-    optimizer = CombinedOptimizer([
-        torch.optim.AdamW(self.lm_head.parameters(), lr=learning_rate, betas=betas, weight_decay=0, fused=True),
-        OrthogonalNesterov(self.transformer.h.parameters(), lr=0.1*learning_rate, momentum=0.95)
-    ])
-# Refactored Example:
-    optimizer = CombinedOptimizer(\
-        self.parameters(),
-        [OrthogonalNesterov, torch.optim.AdamW],
-        [{'lr': 0.1*learning_rate, 'momentum': 0.95}, 
-         {'lr': learning_rate, 'betas': betas, 'weight_decay': 0, 'fused': True}
-        ])
-"""
-
-    def __init__(self, params, optimizer_types, configs):
-        # Separate 2D and non-2D parameters.
-        # param_groups_2d_non2d: (param_groups_2d, param_groups_non2d).
-        # If params is a list of tensors, then each of param_groups_2d and param_groups_non2d
-        # will be a list of tensors.
-        # If params is a list of dicts, then each of param_groups_2d and param_groups_non2d
-        # will be a list of dicts.
-        # If params is a dict, then each of param_groups_2d and param_groups_non2d will
-        # be a list of dicts containing only one dict.
-        (
-            param_groups_2d,
-            param_groups_non2d,
-            total_param_2d_count,
-            total_param_non2d_count,
-        ) = separate_params(params)
-        param_groups_2d_non2d = (param_groups_2d, param_groups_non2d)
-        print(
-            f"Total 2D params: {total_param_2d_count}, Total non-2D params: {total_param_non2d_count}"
-        )
-
-        assert (
-            len(optimizer_types) == len(configs) == 2
-        ), "You must use only two optimizers"
-        assert optimizer_types[0] == Muon, "The first optimizer must be Muon"
-        self.optimizers = [
-            optimizer_types[i](param_groups_2d_non2d[i], **configs[i]) for i in range(2)
-        ]
-        self.param_groups = [pg for opt in self.optimizers for pg in opt.param_groups]
-        self.base_lrs = [opt.param_groups[0]["lr"] for opt in self.optimizers]
-        # Combine the state dicts of all opt in self.optimizers into a single dict
-        self.state = {k: v for opt in self.optimizers for k, v in opt.state.items()}
-        # Initially all states are empty. So no point to print their counts.
-        # Only use the defaults of the OrthogonalNesterov optimizer
-        self.defaults = self.optimizers[0].defaults
-
-    def step(self, *args, **kwargs):
-        for opt in self.optimizers:
-            opt.step(*args, **kwargs)
-
-    def zero_grad(self, **kwargs):
-        for opt in self.optimizers:
-            opt.zero_grad(**kwargs)
-
-    def scale_lrs(self, lr_scale):
-        for base_lr, opt in zip(self.base_lrs, self.optimizers):
-            opt.param_groups[0]["lr"] = base_lr * lr_scale
-
-    def state_dict(self):
-        return [opt.state_dict() for opt in self.optimizers]
