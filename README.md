@@ -86,7 +86,7 @@ parser.add_argument('--sophia_rho', default=0.04, type=float)
 parser.add_argument('--clipping_type', default='no', choices=['no', 'local', 'elementwise']) # for methods with clipping
 parser.add_argument('--clipping_eta', default=1.0, type=float)
 # Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
+parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
