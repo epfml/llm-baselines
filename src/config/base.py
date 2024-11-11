@@ -56,7 +56,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument(
         "--scheduler",
         default="cos",
-        choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd"],
+        choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd", "dd"],
     )
     parser.add_argument("--cos_inf_steps", default=0, type=int)
     # parser.add_argument("--cos-final-lr", default=1e-6, type=float)
@@ -72,6 +72,12 @@ def parse_args(base_parser, args, namespace):
         default="linear",
         choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
     )
+    parser.add_argument(
+        "--dd_second_decay_type",
+        default="linear",
+        choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
+    )
+    parser.add_argument("--dd_first_lr_factor", default=1e-2, type=float)
 
     # Optimization
     parser.add_argument(

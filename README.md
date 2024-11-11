@@ -46,10 +46,12 @@ parser.add_argument('--lr', default=1e-3, type=float)
 parser.add_argument('--wsd_final_lr_scale', default=0.0, type=float) # wsd scheduler
 parser.add_argument('--wsd_fract_decay', default=0.1, type=float) # wsd scheduler 
 parser.add_argument('--decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
+parser.add_argument('--dd_second_decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
+parser.add_argument("--dd_first_lr_factor", default=1e-2, type=float)
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
+parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
 parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations

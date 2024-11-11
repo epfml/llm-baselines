@@ -27,7 +27,7 @@ from optim.lion import Lion
 from optim.muon import CombinedScheduler, Muon, separate_params
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
-                            wsd_schedule)
+                            dd_schedule, wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgdf import SGDF
 from optim.shampoo import DistributedShampoo
@@ -391,6 +391,19 @@ def main(args, parser):
                 init_div_factor=1e2,
                 final_lr_factor=0.1,  # should be 0 here
                 decay_type=args.decay_type,
+            )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+        elif args.scheduler == "dd":
+            lambda_schedule = dd_schedule(
+                n_iterations=args.iterations,
+                n_warmup=args.warmup_steps,
+                fract_fisrt_decay=args.wsd_fract_decay,  # this will be responsible for the first decay phase
+                max_lr=[group.get("lr", args.lr) for group in group_specs],
+                first_final_lr_factor=args.dd_first_lr_factor,
+                second_final_lr_factor=0.0,  # stop with zero lr
+                div_factor=1e2,
+                first_decay_type=args.decay_type,
+                second_decay_type=args.dd_second_decay_type,
             )
             scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
         else:
