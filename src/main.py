@@ -24,7 +24,7 @@ from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
-from optim.muon import Muon, separate_params
+from optim.muon import CombinedScheduler, Muon, separate_params
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             wsd_schedule)
@@ -150,8 +150,6 @@ def main(args, parser):
         )
     elif args.opt == "muon":
         param_groups_2d, param_groups_non2d, _, _ = separate_params(group_specs)
-        print(len(param_groups_2d))
-        print(len(param_groups_non2d))
         opt = Muon(
             muon_params=param_groups_2d[0]["params"],
             lr=args.muon_lr_factor,  # since adamw_lr_ration = adamw_lr / muon_lr
@@ -340,18 +338,22 @@ def main(args, parser):
         if args.scheduler in ["cos", "linear"]:
             # initial lr is args.lr / div_factor
             # final lr is initial_lr/final_div_factor = args.lr / div_factor / final_div_factor
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=opt,
-                max_lr=[
-                    group.get("lr", args.lr) for group in group_specs
-                ],  # it was args.lr
-                total_steps=args.iterations,
-                pct_start=args.warmup_steps
-                / args.iterations,  # it was args.warmup_percent
-                anneal_strategy=args.scheduler,
-                cycle_momentum=False,
-                div_factor=1e2,
-                final_div_factor=1,
+            scheduler = (
+                torch.optim.lr_scheduler.OneCycleLR(
+                    optimizer=opt,
+                    max_lr=[
+                        group.get("lr", args.lr) for group in group_specs
+                    ],  # it was args.lr
+                    total_steps=args.iterations,
+                    pct_start=args.warmup_steps
+                    / args.iterations,  # it was args.warmup_percent
+                    anneal_strategy=args.scheduler,
+                    cycle_momentum=False,
+                    div_factor=1e2,
+                    final_div_factor=1,
+                )
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
             )
         elif args.scheduler == "cos_inf":
             lambda_schedule = cos_inf_schedule(
@@ -361,7 +363,11 @@ def main(args, parser):
                 div_factor=1e2,
                 final_div_factor=0.1,
             )
-            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+            scheduler = (
+                torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
+            )
         elif args.scheduler == "wsd":
             lambda_schedule = wsd_schedule(
                 n_iterations=args.iterations,
@@ -371,7 +377,11 @@ def main(args, parser):
                 final_lr_factor=args.wsd_final_lr_scale,  # should be 0 here
                 decay_type=args.decay_type,
             )
-            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+            scheduler = (
+                torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
+            )
         elif args.scheduler == "cos_wsd":
             lambda_schedule = cosine_wsd_decay_schedule(
                 n_iterations=args.iterations,
