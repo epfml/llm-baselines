@@ -398,7 +398,7 @@ def main(args, parser):
                 n_iterations=args.iterations,
                 n_warmup=args.warmup_steps,
                 fract_fisrt_decay=args.wsd_fract_decay,  # this will be responsible for the first decay phase
-                max_lr=[group.get("lr", args.lr) for group in group_specs],
+                max_lr=args.lr,#[group.get("lr", args.lr) for group in group_specs],
                 first_final_lr_factor=args.dd_first_lr_factor,
                 second_final_lr_factor=0.0,  # stop with zero lr
                 div_factor=1e2,
