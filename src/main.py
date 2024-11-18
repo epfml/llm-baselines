@@ -18,6 +18,7 @@ from models.utils import get_model
 from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
+from optim.adopt import ADOPT
 from optim.base import train
 from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
                            AdamClipDelayedEta)
@@ -284,7 +285,12 @@ def main(args, parser):
             # ),
         )
     elif args.opt == "adopt":
-        raise NotImplementedError("Have not implemented yet")
+        opt = ADOPT(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+        )
     elif args.opt in [
         "clip-adagrad",
         "clip-adagrad-delay-eta",
@@ -398,7 +404,7 @@ def main(args, parser):
                 n_iterations=args.iterations,
                 n_warmup=args.warmup_steps,
                 fract_fisrt_decay=args.wsd_fract_decay,  # this will be responsible for the first decay phase
-                max_lr=args.lr,#[group.get("lr", args.lr) for group in group_specs],
+                max_lr=args.lr,  # [group.get("lr", args.lr) for group in group_specs],
                 first_final_lr_factor=args.dd_first_lr_factor,
                 second_final_lr_factor=0.0,  # stop with zero lr
                 div_factor=1e2,

@@ -192,7 +192,8 @@ def cosine_wsd_decay_schedule(
                     1 - math.sqrt(progress)
                 )
 
-        return final_lr_factor
+        else:
+            return final_lr_factor
 
     return schedule
 
