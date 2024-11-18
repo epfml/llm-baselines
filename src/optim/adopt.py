@@ -45,7 +45,7 @@ class ADOPT(torch.optim.Optimizer):
         )
         super(ADOPT, self).__init__(params, defaults)
 
-    @torch.no_grad
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step."""
         loss = None
