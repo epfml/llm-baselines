@@ -244,8 +244,6 @@ class MARS(torch.optim.Optimizer):
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
                         state["max_exp_avg_sq"] = torch.zeros_like(p.data)
-                # import pdb
-                # pdb.set_trace()
                 exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
                 last_grad = state["last_grad"]
                 lr, wd, beta1, beta2 = (

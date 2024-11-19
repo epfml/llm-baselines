@@ -168,6 +168,9 @@ def train(
                 opt.update_hessian()
                 opt.zero_grad(set_to_none=True)
                 model.zero_grad()
+        elif cfg.opt == "mars":
+            opt.zero_grad(set_to_none=True)
+            opt.update_last_grad()
         else:
             opt.zero_grad(set_to_none=True)
         # opt.zero_grad(set_to_none=True)
