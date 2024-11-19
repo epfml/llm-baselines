@@ -105,6 +105,7 @@ def parse_args(base_parser, args, namespace):
             "clip-adagrad-delay-eta",
             "clip-adam",
             "clip-adam-delay-eta",
+            "mars",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -142,10 +143,21 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
     parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
     parser.add_argument("--sophia_rho", default=0.04, type=float)
+    parser.add_argument("--sophia_bs", default=480, type=int)
     parser.add_argument(
         "--clipping_type", default="no", choices=["no", "local", "elementwise"]
     )
     parser.add_argument("--clip_eta", default=1.0, type=float)
+    parser.add_argument(
+        "--mars_type",
+        default="mars-adamw",
+        choices=["mars-adamw", "mars-lion", "mars-shampoo"],
+    )
+    parser.add_argument("--mars_vr_gamma", default=0.025, type=float)
+    parser.add_argument("--mars_is_approx", default=True, type=float)
+    parser.add_argument("--mars_lr", default=3e-3, type=float)
+    parser.add_argument("--mars_beta1", default=0.95, type=float)
+    parser.add_argument("--mars_beta2", default=0.99, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

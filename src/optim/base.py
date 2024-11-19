@@ -144,7 +144,11 @@ def train(
 
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
-        opt.step() if cfg.opt != "sophiag" else opt.step(bs=480 * cfg.sequence_length)
+        (
+            opt.step()
+            if cfg.opt != "sophiag"
+            else opt.step(bs=cfg.sophia_bs * cfg.sequence_length)
+        )
         if cfg.scheduler != "none":
             scheduler.step()
         if cfg.opt == "sophiag":

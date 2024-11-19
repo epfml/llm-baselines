@@ -25,6 +25,7 @@ from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
+from optim.mars import MARS
 from optim.muon import CombinedScheduler, Muon, separate_params
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
@@ -328,6 +329,21 @@ def main(args, parser):
         }
         if args.opt == "clip-adam-delay-eta":
             opt = AdamClipDelayedEta(**clipped_adam_delay_eta_cfg)
+    elif args.opt == "mars":
+        opt = MARS(
+            group_specs,
+            lr=args.mars_lr,
+            betas=(args.mars_beta1, args.mars_beta2),
+            weight_decay=args.weight_decay,
+            amsgrad=False,
+            gamma=args.mars_vr_gamma,
+            is_approx=args.mars_is_approx,
+            mars_type=args.mars_type,
+            optimize_1d=False,  # we set in order to optimize 1D parameters with AdamW
+            lr_1d=args.lr,  # AdamW's lr when optimize_1d=False
+            betas_1d=(args.beta1, args.beta2),  # AdamW's betas when optimize_1d=False
+            weight_decay_1d=0.1,  # AdamW's weight decay
+        )
     else:
         opt = torch.optim.SGD(
             group_specs,
