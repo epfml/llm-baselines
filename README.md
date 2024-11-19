@@ -89,6 +89,10 @@ parser.add_argument('--clipping_type', default='no', choices=['no', 'local', 'el
 parser.add_argument('--clipping_eta', default=1.0, type=float)
 parser.add_argument('--mars_type', default='mars-adamw', choices=['mars-adamw', 'mars-lion', 'mars-shampoo'],)
 parser.add_argument('--mars_vr_gamma', default=0.025, type=float)
+parser.add_argument('--mars_is_approx', default=True, type=float)
+parser.add_argument('--mars_lr', default=3e-3, type=float)
+parser.add_argument('--mars_beta1', default=0.95, type=float)
+parser.add_argument('--mars_beta2', default=0.99, type=float)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])
