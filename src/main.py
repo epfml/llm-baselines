@@ -289,6 +289,7 @@ def main(args, parser):
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2),
+            eps=1e-6,
             weight_decay=args.weight_decay,
         )
     elif args.opt in [
