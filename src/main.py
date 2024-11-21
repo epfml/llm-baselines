@@ -15,6 +15,7 @@ import distributed
 import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
+from optim.adafactor import Adafactor
 from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
@@ -22,6 +23,7 @@ from optim.adopt import ADOPT
 from optim.base import train
 from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
                            AdamClipDelayedEta)
+from optim.lamb import Lamb
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
@@ -343,6 +345,24 @@ def main(args, parser):
             lr_1d=args.lr,  # AdamW's lr when optimize_1d=False
             betas_1d=(args.beta1, args.beta2),  # AdamW's betas when optimize_1d=False
             weight_decay_1d=0.1,  # AdamW's weight decay
+        )
+    elif args.opt == "adafactor":
+        opt = Adafactor(
+            group_specs,
+            lr=args.lr,
+            decay_rate=args.adafactor_decay_rate,
+            beta1=args.beta1,
+            clip_threshold=1.0,
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt == "lamb":
+        opt = Lamb(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            adam=False,
+            bias_correction=args.lamb_use_bias_correction,
         )
     else:
         opt = torch.optim.SGD(

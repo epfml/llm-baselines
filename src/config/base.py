@@ -106,6 +106,8 @@ def parse_args(base_parser, args, namespace):
             "clip-adam",
             "clip-adam-delay-eta",
             "mars",
+            "adafactor",
+            "lamb",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -158,6 +160,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--mars_lr", default=3e-3, type=float)
     parser.add_argument("--mars_beta1", default=0.95, type=float)
     parser.add_argument("--mars_beta2", default=0.99, type=float)
+    parser.add_argument("--adafactor_decay_rate", default=-0.8, type=float)
+    parser.add_argument("--lamb_use_bias_correction", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
