@@ -192,6 +192,151 @@ def cosine_wsd_decay_schedule(
                     1 - math.sqrt(progress)
                 )
 
-        return final_lr_factor
+        else:
+            return final_lr_factor
+
+    return schedule
+
+
+def dd_schedule(
+    n_iterations,
+    n_warmup,
+    fract_fisrt_decay,
+    max_lr,
+    first_final_lr_factor=1e-2,
+    second_final_lr_factor=0.0,
+    div_factor=1e2,
+    first_decay_type="cosine",
+    second_decay_type="linear",
+):
+    """Warmup, cosine annealing, and linear decay schedule.
+    Args:
+        n_iterations: total number of iterations
+        n_warmup: number of warmup iterations
+        fract_fisrt_decay: fraction of iterations for the first decay phase
+        max_lr: the mamimum value of learning rate during the training
+        first_final_lr_factor: factor by which to reduce max_lr at the end of the first decay phase
+        second_final_lr_factor: factor by which to reduce first_final_lr_factor at the end of the second decay phase
+        div_factor: initial division factor for warmup
+        first_decay_type: which decay approach to use during the fisrt decay phase
+        second_decay_type: which decay approach to use during the second decay phase
+    Returns:
+        schedule: a function that takes the current iteration and
+        returns the multiplicative factor for the learning rate
+    """
+    if fract_fisrt_decay > 1.0:
+        raise ValueError(
+            "Invalid fract_fisrt_decay value: {}".format(fract_fisrt_decay)
+        )
+    n_fisrt_decay = int(fract_fisrt_decay * n_iterations)
+
+    def schedule(step):
+        if step < n_warmup:
+            return (step / n_warmup) + (1 - step / n_warmup) / div_factor
+        elif step < n_warmup + n_fisrt_decay:
+            if first_decay_type == "cosine":
+                return first_final_lr_factor + 0.5 * (
+                    max_lr - first_final_lr_factor
+                ) * (1 + math.cos(math.pi * (step - n_warmup) / n_fisrt_decay))
+            elif first_decay_type == "linear":
+                return first_final_lr_factor + (max_lr - first_final_lr_factor) * (
+                    1 - (step - n_warmup) / n_fisrt_decay
+                )
+            elif first_decay_type == "exp":
+                return first_final_lr_factor ** ((step - n_warmup) / n_fisrt_decay)
+            elif first_decay_type == "mirror_cosine":
+                cosine_value = (
+                    first_final_lr_factor
+                    + (max_lr - first_final_lr_factor)
+                    * (1 + math.cos(math.pi * (step - n_warmup) / n_fisrt_decay))
+                    * 0.5
+                )
+                linear_value = first_final_lr_factor + (
+                    max_lr - first_final_lr_factor
+                ) * (1 - (step - n_warmup) / n_fisrt_decay)
+                return linear_value * 2 - cosine_value
+            elif first_decay_type == "square":
+                return first_final_lr_factor + (max_lr - first_final_lr_factor) * (
+                    1 - ((step - n_warmup) / n_fisrt_decay) ** 2
+                )
+            elif first_decay_type == "sqrt":
+                return first_final_lr_factor + (max_lr - first_final_lr_factor) * (
+                    1 - math.sqrt((step - n_warmup) / n_fisrt_decay)
+                )
+            else:
+                raise ValueError(
+                    f"decay type {first_decay_type} is not in ['cosine','miror_cosine','linear','exp']"
+                )
+        elif step < n_iterations:
+            if second_decay_type == "linear":
+                return second_final_lr_factor + (
+                    first_final_lr_factor - second_final_lr_factor
+                ) * (
+                    1
+                    - (step - n_warmup - n_fisrt_decay) / (n_iterations - n_fisrt_decay)
+                )
+            elif second_decay_type == "cosine":
+                return second_final_lr_factor + 0.5 * (
+                    first_final_lr_factor - second_final_lr_factor
+                ) * (
+                    1
+                    + math.cos(
+                        math.pi
+                        * (step - n_warmup - n_fisrt_decay)
+                        / (n_iterations - n_fisrt_decay)
+                    )
+                )
+            elif second_decay_type == "exp":
+                return first_final_lr_factor ** (
+                    (step - n_warmup - n_fisrt_decay) / (n_iterations - n_fisrt_decay)
+                )
+            elif second_decay_type == "mirror_cosine":
+                cosine_value = (
+                    second_final_lr_factor
+                    + (first_final_lr_factor - second_final_lr_factor)
+                    * (
+                        1
+                        + math.cos(
+                            math.pi
+                            * (step - n_warmup - n_fisrt_decay)
+                            / (n_iterations - n_fisrt_decay)
+                        )
+                    )
+                    * 0.5
+                )
+                linear_value = second_final_lr_factor + (
+                    first_final_lr_factor - second_final_lr_factor
+                ) * (
+                    1
+                    - (step - n_warmup - n_fisrt_decay) / (n_iterations - n_fisrt_decay)
+                )
+                return linear_value * 2 - cosine_value
+            elif second_decay_type == "square":
+                return second_final_lr_factor + (
+                    first_final_lr_factor - second_final_lr_factor
+                ) * (
+                    1
+                    - (
+                        (step - n_warmup - n_fisrt_decay)
+                        / (n_iterations - n_fisrt_decay)
+                    )
+                    ** 2
+                )
+            elif second_decay_type == "sqrt":
+                return second_final_lr_factor + (
+                    first_final_lr_factor - second_final_lr_factor
+                ) * (
+                    1
+                    - math.sqrt(
+                        (step - n_warmup - n_fisrt_decay)
+                        / (n_iterations - n_fisrt_decay)
+                    )
+                )
+            else:
+                raise ValueError(
+                    f"decay type {second_decay_type} is not in ['cosine','miror_cosine','linear','exp']"
+                )
+        else:
+            return second_final_lr_factor
 
     return schedule

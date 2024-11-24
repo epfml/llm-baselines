@@ -9,23 +9,29 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import wandb
 
 import config
 import distributed
-import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
+from optim.adafactor import Adafactor
 from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
+from optim.adopt import ADOPT
 from optim.base import train
+from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
+                           AdamClipDelayedEta)
+from optim.lamb import Lamb
 # from optim.distributed_shampoo.distributed_shampoo import DistributedShampoo
 # from optim.distributed_shampoo.shampoo_types import AdamGraftingConfig
 from optim.lion import Lion
-from optim.muon import CombinedOptimizer, Muon
+from optim.mars import MARS
+from optim.muon import CombinedScheduler, Muon, separate_params
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
-                            wsd_schedule)
+                            dd_schedule, wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgdf import SGDF
 from optim.shampoo import DistributedShampoo
@@ -50,7 +56,6 @@ def get_args():
 
 
 def main(args, parser):
-
     distributed_backend = distributed.make_backend_from_args(args)
     args = distributed_backend.get_adjusted_args_for_process(args)
     args.world_size = distributed_backend.get_world_size()
@@ -148,24 +153,18 @@ def main(args, parser):
             correct_bias=args.correct_bias,
         )
     elif args.opt == "muon":
-        opt = CombinedOptimizer(
-            group_specs,
-            [Muon, torch.optim.AdamW],
-            [
-                {
-                    "lr": args.muon_lr_factor * args.lr,
-                    "momentum": args.momentum,
-                    "nesterov": args.nesterov,
-                    "backend": args.muon_backend,
-                    "backend_steps": args.muon_backend_steps,
-                },
-                {
-                    "lr": args.lr,
-                    "betas": (args.beta1, args.beta2),
-                    "weight_decay": args.weight_decay,
-                    "fused": True,
-                },
-            ],
+        param_groups_2d, param_groups_non2d, _, _ = separate_params(group_specs)
+        opt = Muon(
+            muon_params=param_groups_2d[0]["params"],
+            lr=args.muon_lr_factor,  # since adamw_lr_ration = adamw_lr / muon_lr
+            momentum=args.momentum,
+            nesterov=args.nesterov,  # always use nesterov momentum for Muon
+            ns_steps=args.muon_ns_steps,
+            adamw_params=param_groups_non2d[0]["params"],
+            adamw_lr=args.lr,
+            adamw_betas=(args.beta1, args.beta2),
+            adamw_eps=1e-8,
+            adamw_wd=args.weight_decay,
         )
     elif args.opt == "ademamix":
         opt = AdEMAMix(
@@ -288,6 +287,83 @@ def main(args, parser):
             #     epsilon=1e-8,
             # ),
         )
+    elif args.opt == "adopt":
+        opt = ADOPT(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            eps=1e-6,
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt in [
+        "clip-adagrad",
+        "clip-adagrad-delay-eta",
+        "clip-adam",
+        "clip-adam-delay-eta",
+    ]:
+        clipped_adagrad_cfg = {
+            "lr": args.lr,
+            "eps": 1e-8,
+            "weight_decay": args.weight_decay,
+            "clipping": args.clipping_type,
+            "max_grad_norm": 1.0,
+        }
+        if args.opt == "clip-adagrad":
+            opt = AdagradClip(**clipped_adagrad_cfg)
+        clipped_adagrad_delay_eta_cfg = {
+            **clipped_adagrad_cfg,
+            "exp_avg_sq_value": 0.0001,
+            "etta": args.clipping_eta,
+        }
+        if args.opt == "clip-adagrad-delay-eta":
+            opt = AdaGradClipDelayedEta(**clipped_adagrad_delay_eta_cfg)
+        clipped_adam_cfg = {
+            **clipped_adagrad_cfg,
+            "betas": (args.beta1, args.beta2),
+            "correct_bias": args.correct_bias,
+        }
+        if args.opt == "clip-adam":
+            opt = AdamClip(**clipped_adam_cfg)
+        clipped_adam_delay_eta_cfg = {
+            **clipped_adam_cfg,
+            "exp_avg_sq_value": 0.00001,
+            "etta": args.clipping_eta,
+        }
+        if args.opt == "clip-adam-delay-eta":
+            opt = AdamClipDelayedEta(**clipped_adam_delay_eta_cfg)
+    elif args.opt == "mars":
+        opt = MARS(
+            group_specs,
+            lr=args.mars_lr,
+            betas=(args.mars_beta1, args.mars_beta2),
+            weight_decay=args.weight_decay,
+            amsgrad=False,
+            gamma=args.mars_vr_gamma,
+            is_approx=args.mars_is_approx,
+            mars_type=args.mars_type,
+            optimize_1d=False,  # we set in order to optimize 1D parameters with AdamW
+            lr_1d=args.lr,  # AdamW's lr when optimize_1d=False
+            betas_1d=(args.beta1, args.beta2),  # AdamW's betas when optimize_1d=False
+            weight_decay_1d=0.1,  # AdamW's weight decay
+        )
+    elif args.opt == "adafactor":
+        opt = Adafactor(
+            group_specs,
+            lr=args.lr,
+            decay_rate=args.adafactor_decay_rate,
+            beta1=args.beta1,
+            clip_threshold=1.0,
+            weight_decay=args.weight_decay,
+        )
+    elif args.opt == "lamb":
+        opt = Lamb(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            weight_decay=args.weight_decay,
+            adam=False,
+            bias_correction=args.lamb_use_bias_correction,
+        )
     else:
         opt = torch.optim.SGD(
             group_specs,
@@ -305,18 +381,22 @@ def main(args, parser):
         if args.scheduler in ["cos", "linear"]:
             # initial lr is args.lr / div_factor
             # final lr is initial_lr/final_div_factor = args.lr / div_factor / final_div_factor
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=opt,
-                max_lr=[
-                    group.get("lr", args.lr) for group in group_specs
-                ],  # it was args.lr
-                total_steps=args.iterations,
-                pct_start=args.warmup_steps
-                / args.iterations,  # it was args.warmup_percent
-                anneal_strategy=args.scheduler,
-                cycle_momentum=False,
-                div_factor=1e2,
-                final_div_factor=1,
+            scheduler = (
+                torch.optim.lr_scheduler.OneCycleLR(
+                    optimizer=opt,
+                    max_lr=[
+                        group.get("lr", args.lr) for group in group_specs
+                    ],  # it was args.lr
+                    total_steps=args.iterations,
+                    pct_start=args.warmup_steps
+                    / args.iterations,  # it was args.warmup_percent
+                    anneal_strategy=args.scheduler,
+                    cycle_momentum=False,
+                    div_factor=1e2,
+                    final_div_factor=1,
+                )
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
             )
         elif args.scheduler == "cos_inf":
             lambda_schedule = cos_inf_schedule(
@@ -326,7 +406,11 @@ def main(args, parser):
                 div_factor=1e2,
                 final_div_factor=0.1,
             )
-            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+            scheduler = (
+                torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
+            )
         elif args.scheduler == "wsd":
             lambda_schedule = wsd_schedule(
                 n_iterations=args.iterations,
@@ -336,7 +420,11 @@ def main(args, parser):
                 final_lr_factor=args.wsd_final_lr_scale,  # should be 0 here
                 decay_type=args.decay_type,
             )
-            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+            scheduler = (
+                torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+                if args.opt != "muon"
+                else CombinedScheduler(opt, args)
+            )
         elif args.scheduler == "cos_wsd":
             lambda_schedule = cosine_wsd_decay_schedule(
                 n_iterations=args.iterations,
@@ -346,6 +434,19 @@ def main(args, parser):
                 init_div_factor=1e2,
                 final_lr_factor=0.1,  # should be 0 here
                 decay_type=args.decay_type,
+            )
+            scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
+        elif args.scheduler == "dd":
+            lambda_schedule = dd_schedule(
+                n_iterations=args.iterations,
+                n_warmup=args.warmup_steps,
+                fract_fisrt_decay=args.wsd_fract_decay,  # this will be responsible for the first decay phase
+                max_lr=args.lr,  # [group.get("lr", args.lr) for group in group_specs],
+                first_final_lr_factor=args.dd_first_lr_factor,
+                second_final_lr_factor=0.0,  # stop with zero lr
+                div_factor=1e2,
+                first_decay_type=args.decay_type,
+                second_decay_type=args.dd_second_decay_type,
             )
             scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
         else:

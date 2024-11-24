@@ -56,7 +56,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument(
         "--scheduler",
         default="cos",
-        choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd"],
+        choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd", "dd"],
     )
     parser.add_argument("--cos_inf_steps", default=0, type=int)
     # parser.add_argument("--cos-final-lr", default=1e-6, type=float)
@@ -72,6 +72,12 @@ def parse_args(base_parser, args, namespace):
         default="linear",
         choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
     )
+    parser.add_argument(
+        "--dd_second_decay_type",
+        default="linear",
+        choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
+    )
+    parser.add_argument("--dd_first_lr_factor", default=1e-2, type=float)
 
     # Optimization
     parser.add_argument(
@@ -94,6 +100,14 @@ def parse_args(base_parser, args, namespace):
             "prodigy",
             "sophiag",
             "shampoo",
+            "adopt",
+            "clip-adagrad",
+            "clip-adagrad-delay-eta",
+            "clip-adam",
+            "clip-adam-delay-eta",
+            "mars",
+            "adafactor",
+            "lamb",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -114,9 +128,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--soap_data_format", default="channels_first", type=str)
     parser.add_argument("--correct_bias", default=True, type=bool)
     parser.add_argument("--nesterov", default=False, type=bool)
-    parser.add_argument("--muon_backend", default="newtonschulz5", type=str)
-    parser.add_argument("--muon_backend_steps", default=5, type=int)
-    parser.add_argument("--muon_lr_factor", default=0.1, type=float)
+    parser.add_argument("--muon_ns_steps", default=5, type=int)
+    parser.add_argument("--muon_lr_factor", default=1.0, type=float)
     parser.add_argument("--adema_beta3", default=0.9, type=float)
     parser.add_argument("--adema_alpha", default=2.0, type=float)
     parser.add_argument("--adema_beta3_warmup", default=None, type=int)
@@ -132,6 +145,23 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--prodigy_safeguard_warmup", default=False, type=bool)
     parser.add_argument("--prodigy_fsdp_in_use", default=False, type=bool)
     parser.add_argument("--sophia_rho", default=0.04, type=float)
+    parser.add_argument("--sophia_bs", default=480, type=int)
+    parser.add_argument(
+        "--clipping_type", default="no", choices=["no", "local", "elementwise"]
+    )
+    parser.add_argument("--clip_eta", default=1.0, type=float)
+    parser.add_argument(
+        "--mars_type",
+        default="mars-adamw",
+        choices=["mars-adamw", "mars-lion", "mars-shampoo"],
+    )
+    parser.add_argument("--mars_vr_gamma", default=0.025, type=float)
+    parser.add_argument("--mars_is_approx", default=True, type=float)
+    parser.add_argument("--mars_lr", default=3e-3, type=float)
+    parser.add_argument("--mars_beta1", default=0.95, type=float)
+    parser.add_argument("--mars_beta2", default=0.99, type=float)
+    parser.add_argument("--adafactor_decay_rate", default=-0.8, type=float)
+    parser.add_argument("--lamb_use_bias_correction", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
@@ -149,6 +179,8 @@ def parse_args(base_parser, args, namespace):
             "slimpajama",
             "slimpajama_chunk1",
             "redpajamav2",
+            "fineweb",
+            "finewebedu",
         ],
     )
     parser.add_argument(

@@ -6,9 +6,6 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
-import torch.nn.functional as F
-
-import wandb
 
 
 def get_batch(datareader, device="cpu"):

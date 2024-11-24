@@ -4,9 +4,8 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import torch
-import yaml
-
 import wandb
+import yaml
 
 # from logger.logger import DynamicsLogger
 from .utils import (eval, get_batch, load_checkpoint, load_worker_state,
@@ -99,6 +98,7 @@ def train(
             or (curr_iter in cfg.full_eval_at)
         ):
             eval_and_log(
+                tokens,
                 curr_iter,
                 epoch,
                 model,
@@ -143,14 +143,20 @@ def train(
 
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
-        opt.step() if cfg.opt != "sophiag" else opt.step(bs=tokens)
+        (
+            opt.step()
+            if cfg.opt != "sophiag"
+            else opt.step(bs=cfg.sophia_bs * cfg.sequence_length)
+        )
         if cfg.scheduler != "none":
             scheduler.step()
         if cfg.opt == "sophiag":
             opt.zero_grad(set_to_none=True)
             if curr_iter % 10 == 10 - 1:
                 sample_again = model(x, targets=y, get_logits=True)
-                samp_dist = torch.distributions.Categorical(logits=sample_again["logits"])
+                samp_dist = torch.distributions.Categorical(
+                    logits=sample_again["logits"]
+                )
                 y_sample = samp_dist.sample()
                 loss_sampled = torch.nn.functional.cross_entropy(
                     sample_again["logits"].view(-1, sample_again["logits"].size(-1)),
@@ -161,6 +167,9 @@ def train(
                 opt.update_hessian()
                 opt.zero_grad(set_to_none=True)
                 model.zero_grad()
+        elif cfg.opt == "mars":
+            opt.zero_grad(set_to_none=True)
+            opt.update_last_grad()
         else:
             opt.zero_grad(set_to_none=True)
         # opt.zero_grad(set_to_none=True)
@@ -186,6 +195,7 @@ def train(
             if cfg.wandb:
                 wandb.log(
                     {
+                        "tokens": tokens,
                         "iter": curr_iter,
                         "train/loss": train_loss,
                         "train/perplexity": 2.71828**train_loss,
@@ -204,6 +214,7 @@ def train(
 
 
 def eval_and_log(
+    tokens,
     curr_iter,
     epoch,
     model,
@@ -249,6 +260,7 @@ def eval_and_log(
     if cfg.wandb:
         if curr_iter == cfg.iterations or full_eval:
             logs = {
+                "tokens": tokens,
                 "iter": curr_iter,
                 "final-val/loss": val_loss,
                 "final-val/perplexity": val_perplexity,
@@ -256,6 +268,7 @@ def eval_and_log(
             }
         else:
             logs = {
+                "tokens": tokens,
                 "iter": curr_iter,
                 "val/loss": val_loss,
                 "val/perplexity": val_perplexity,

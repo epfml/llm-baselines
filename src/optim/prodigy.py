@@ -1,3 +1,8 @@
+"""
+Here is an original implementation of Prodigy. 
+Source: https://github.com/konstmish/prodigy
+"""
+
 import math
 
 import torch

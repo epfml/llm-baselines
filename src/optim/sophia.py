@@ -169,7 +169,6 @@ def sophiag(
     weight_decay: float,
     maximize: bool
 ):
-
     if not all(isinstance(t, torch.Tensor) for t in state_steps):
         raise RuntimeError(
             "API has changed, `state_steps` argument must contain a list of singleton tensors"
@@ -210,7 +209,6 @@ def _single_tensor_sophiag(
     maximize: bool,
     capturable: bool
 ):
-
     for i, param in enumerate(params):
         grad = grads[i] if not maximize else -grads[i]
         exp_avg = exp_avgs[i]

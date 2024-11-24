@@ -46,12 +46,14 @@ parser.add_argument('--lr', default=1e-3, type=float)
 parser.add_argument('--wsd_final_lr_scale', default=0.0, type=float) # wsd scheduler
 parser.add_argument('--wsd_fract_decay', default=0.1, type=float) # wsd scheduler 
 parser.add_argument('--decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
+parser.add_argument('--dd_second_decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
+parser.add_argument('--dd_first_lr_factor', default=1e-2, type=float)
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
+parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
@@ -65,9 +67,8 @@ parser.add_argument('--normalize_grads', default=False, type=bool)
 parser.add_argument('--soap_data_format', default='channels_first', type=str)
 parser.add_argument('--correct_bias', default=True, type=bool)
 parser.add_argument('--nesterov', default=False, type=bool) # whether to use Nesterov-style momentum 
-parser.add_argument('--muon_backend', default='newtonschulz5', type=str) # the chosen backend for the orthogonalization step
-parser.add_argument('--muon_backend_steps', default=5, type=int) # the number of iteration steps to use in the muon_backend, if it is iterative
-parser.add_argument('--muon_lr_factor', default=0.1, type=float) # a factor by which to reduce the lr for muon
+parser.add_argument('--muon_ns_steps', default=5, type=int) # the number of steps to use in the newton schulz, if it is iterative
+parser.add_argument('--muon_lr_factor', default=0.02, type=float) # a factor by which to reduce the lr for muon
 parser.add_argmunet('--adema_beta3', default=0.9, type=float) # beta3 in AdEMAMix
 parser.add_argument('--adema_alpha', default=2.0, type=float) # alpha in AdEMAMix
 parser.add_argument('--adema_beta3_warmup', default=None, type=int) # AdEMAMix hyperparameter
@@ -84,8 +85,18 @@ parser.add_argument('--prodigy_use_bias_correction', default=False, type=bool)
 parser.add_argument('--prodigy_safeguard_warmup', default=False, type=bool) # Remove lr from the denominator of D estimate to avoid issues during warm-up stage. Off by default.
 parser.add_argument('--prodigy_fsdp_in_use', default=False, type=bool)
 parser.add_argument('--sophia_rho', default=0.04, type=float)
+parser.add_argument('--clipping_type', default='no', choices=['no', 'local', 'elementwise']) # for methods with clipping
+parser.add_argument('--clipping_eta', default=1.0, type=float)
+parser.add_argument('--mars_type', default='mars-adamw', choices=['mars-adamw', 'mars-lion', 'mars-shampoo'],)
+parser.add_argument('--mars_vr_gamma', default=0.025, type=float)
+parser.add_argument('--mars_is_approx', default=True, type=float)
+parser.add_argument('--mars_lr', default=3e-3, type=float)
+parser.add_argument('--mars_beta1', default=0.95, type=float)
+parser.add_argument('--mars_beta2', default=0.99, type=float)
+parser.add_argument('--adafactor_decay_rate', default=-0.8, type=float)
+parser.add_argument('--lamb_use_bias_correction', default=False, type=bool)
 # Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', "arxiv2000", 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1'])
+parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
@@ -123,7 +134,6 @@ parser.add_argument('--log_dynamics', action='store_true')
 # Distributed args
 parser.add_argument('--distributed_backend', default=None, type=str, required=False,
                     choices=distributed.registered_backends())  # distributed backend type (e.g. nccl)
-# parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
 ```
 
 ## Using WandB

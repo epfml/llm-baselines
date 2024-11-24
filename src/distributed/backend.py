@@ -2,7 +2,6 @@ from typing import List
 
 
 class DistributedBackend(object):
-
     def __init__(self, args):
         pass
 

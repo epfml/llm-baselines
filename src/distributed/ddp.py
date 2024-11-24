@@ -10,7 +10,6 @@ from .backend import DistributedBackend
 
 
 class DataParallelDistributedBackend(DistributedBackend):
-
     def __init__(self, args):
         self.rank = int(os.environ.get("RANK", -1))
         assert self.rank != -1, "DDP backend can not be used without rank"
