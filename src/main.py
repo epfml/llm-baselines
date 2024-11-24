@@ -153,14 +153,30 @@ def main(args, parser):
             correct_bias=args.correct_bias,
         )
     elif args.opt == "muon":
-        param_groups_2d, param_groups_non2d, _, _ = separate_params(group_specs)
+        param_list = list(model.parameters()) if args.distributed_backend is None else list(model.module.parameters())
+        assert sum(p.numel() for p in param_list) == params_cnt, "number of parameters must be the same"
+        # param_groups_2d, param_groups_non2d, total_param_2d_count, total_param_non2d_count = separate_params(param_list) #group_specs
+        # if args.distributed_backend is not None:
+        #     param_groups_non2d.extend(list(model.module.lm_head.parameters()))
+        # else:
+        #     param_groups_non2d.extend(list(model.lm_head.parameters()))
+        # print("param_groups_non2d", param_groups_non2d)
+        # print("param_groups_2d", param_groups_2d)
+        # print("2D params", total_param_2d_count)
+        # print("non-2D params", total_param_non2d_count)
+        # muon_params = [p for p in model.parameters() if p.ndim >=2]
+        # adamw_params = [p for p in model.parameters() if p.ndim < 2]
+        # adamw_params.extend(model.lm_head.parameters())
+        # adamw_params.extend(model.embed.parameters())
+        # print(model)
+        # print(len(muon_params), len(adamw_params))
         opt = Muon(
-            muon_params=param_groups_2d[0]["params"],
+            muon_params=param_list,#param_groups_2d[0]["params"],
             lr=args.muon_lr_factor,  # since adamw_lr_ration = adamw_lr / muon_lr
             momentum=args.momentum,
             nesterov=args.nesterov,  # always use nesterov momentum for Muon
             ns_steps=args.muon_ns_steps,
-            adamw_params=param_groups_non2d[0]["params"],
+            adamw_params=None,#param_groups_non2d[0]["params"],
             adamw_lr=args.lr,
             adamw_betas=(args.beta1, args.beta2),
             adamw_eps=1e-8,
