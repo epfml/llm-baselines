@@ -88,7 +88,7 @@ class Signum(torch.optim.Optimizer):
                 state = self.state[p]
 
                 if group["weight_decay"] != 0:
-                    grad = grad.add(p, alpha=group["weight_decay"])
+                    p.mul_(1 - group["lr"] * group["weight_decay"])
 
                 if len(state) == 0:
                     self._init_state(example=p, state=state)
