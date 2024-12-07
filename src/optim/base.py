@@ -153,7 +153,7 @@ def train(
             scheduler.step()
         if cfg.opt == "sophiag":
             opt.zero_grad(set_to_none=True)
-            if curr_iter % 10 == 10 - 1:
+            if curr_iter % cfg.precondition_frequency == cfg.precondition_frequency - 1:
                 sample_again = model(x, targets=y, get_logits=True)
                 samp_dist = torch.distributions.Categorical(
                     logits=sample_again["logits"]

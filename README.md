@@ -1,6 +1,6 @@
 # LLM-baselines
 
-A modular codebase to experiment with transformers, inspired by NanoGPT. 
+A modular codebase to experiment with transformers, inspired by nanoGPT. 
 
 ## Quickstart 
 
@@ -53,13 +53,13 @@ parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
-parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
+parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in nanoGPT
 parser.add_argument('--momentum', default=0.9, type=float)
 parser.add_argument('--shampoo_beta', default=-1.0, type=float)
-parser.add_argument('--precondition_frequency', default=10, type=int)
+parser.add_argument('--precondition_frequency', default=10, type=int) #for SOAP and Sophia
 parser.add_argument('--max_precond_dim', default=10000, type=int)
 parser.add_argument('--merge_dims', default=False, type=bool) # merge dimensions till the product of the dimensions is less than or equal to max_precond_dim
 parser.add_argument('--precondition_1d', default=False, type=bool)

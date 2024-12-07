@@ -108,6 +108,7 @@ def parse_args(base_parser, args, namespace):
             "mars",
             "adafactor",
             "lamb",
+            "normalized-sgd",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)

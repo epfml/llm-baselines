@@ -27,6 +27,7 @@ from optim.lamb import Lamb
 from optim.lion import Lion
 from optim.mars import MARS
 from optim.muon import CombinedScheduler, Muon
+from optim.normalized import NormalizedSGD
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             dd_schedule, wsd_schedule)
@@ -368,6 +369,16 @@ def main(args, parser):
             weight_decay=args.weight_decay,
             adam=False,
             bias_correction=args.lamb_use_bias_correction,
+        )
+    elif args.opt == "normalized-sgd":
+        opt = NormalizedSGD(
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
+            dampening=args.dampening,
+            weight_decay=args.weight_decay,
+            nesterov=args.nesterov,
+            sign_update=False,
         )
     else:
         opt = torch.optim.SGD(
