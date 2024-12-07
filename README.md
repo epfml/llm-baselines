@@ -95,6 +95,7 @@ parser.add_argument('--mars_beta1', default=0.95, type=float)
 parser.add_argument('--mars_beta2', default=0.99, type=float)
 parser.add_argument('--adafactor_decay_rate', default=-0.8, type=float)
 parser.add_argument('--lamb_use_bias_correction', default=False, type=bool)
+parser.add_argument('--use_zloss', default=False, type=bool)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

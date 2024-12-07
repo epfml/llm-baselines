@@ -163,6 +163,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--mars_beta2", default=0.99, type=float)
     parser.add_argument("--adafactor_decay_rate", default=-0.8, type=float)
     parser.add_argument("--lamb_use_bias_correction", default=False, type=bool)
+    parser.add_argument("--use_zloss", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")

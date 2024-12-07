@@ -37,6 +37,7 @@ from optim.shampoo import DistributedShampoo
 from optim.sign import Signum
 from optim.soap import SOAP
 from optim.sophia import SophiaG
+from optim.zloss import train_zloss
 
 
 def get_args():
@@ -482,6 +483,10 @@ def main(args, parser):
             args.resume_from = str(exp_dir / "ckpts" / "latest")
     elif distributed_backend.is_master_process():
         exp_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.use_zloss:
+        train = train_zloss
+        print("Use Z-loss")
 
     stats = train(
         model=model,

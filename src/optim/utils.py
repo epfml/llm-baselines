@@ -50,6 +50,18 @@ def eval(
 
 
 @torch.no_grad()
+def eval_zloss(
+    model,
+    reader,
+    device="cpu",
+    max_num_batches=24,
+    ctx=nullcontext(),
+    cfg=None,
+):
+    pass
+
+
+@torch.no_grad()
 def eval_sweep_dropk(
     model,
     data_tensor,
