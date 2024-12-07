@@ -8,15 +8,22 @@ from tqdm import tqdm
 tknzr = tiktoken.get_encoding("gpt2")
 
 
-def get_openwebtext2_data(datasets_base_dir, num_proc=40):
-    """https://openwebtext2.readthedocs.io/en/latest/"""
-    OWT2_DATA_PATH = os.path.join(datasets_base_dir, "openwebtext2/")
-    if not os.path.exists(os.path.join(OWT2_DATA_PATH, "train.bin")):
-        os.makedirs(OWT2_DATA_PATH, exist_ok=True)
-        dataset = load_dataset("the_pile_openwebtext2")
+def get_fineweb_edu_data(datasets_dir, num_proc=40):
+    """To change the cache dir, run `export HF_HOME=/path/to/cache/` before running the code."""
+    FWEB_DATA_PATH = os.path.join(datasets_dir, "fineweb-edu-100BT/")
+    if not os.path.exists(os.path.join(FWEB_DATA_PATH, "train.bin")):
+        os.makedirs(FWEB_DATA_PATH, exist_ok=True)
 
-        split_dataset = dataset["train"].train_test_split(
-            test_size=0.0005, seed=2357, shuffle=True
+        dataset = load_dataset(
+            "HuggingFaceFW/fineweb-edu",
+            name="sample-100BT",
+            split="train",
+            streaming=False,
+            verification_mode="no_checks",
+        )
+
+        split_dataset = dataset.train_test_split(
+            test_size=0.0001, seed=2357, shuffle=True
         )
         split_dataset["val"] = split_dataset.pop("test")
 
@@ -42,10 +49,10 @@ def get_openwebtext2_data(datasets_base_dir, num_proc=40):
         # concatenate all the ids in each dataset into one large file we can use for training
         for split, dset in tokenized.items():
             arr_len = np.sum(dset["len"])
-            filename = os.path.join(OWT2_DATA_PATH, f"{split}.bin")
+            filename = os.path.join(FWEB_DATA_PATH, f"{split}.bin")
             dtype = np.uint16  # (can do since enc.max_token_value == 50256 is < 2**16)
             arr = np.memmap(filename, dtype=dtype, mode="w+", shape=(arr_len,))
-            total_batches = 1024
+            total_batches = min(1024, len(dset))
 
             idx = 0
             for batch_idx in tqdm(range(total_batches), desc=f"writing {filename}"):
@@ -60,6 +67,10 @@ def get_openwebtext2_data(datasets_base_dir, num_proc=40):
             arr.flush()
 
     return {
-        "train": os.path.join(OWT2_DATA_PATH, "train.bin"),
-        "val": os.path.join(OWT2_DATA_PATH, "val.bin"),
+        "train": os.path.join(FWEB_DATA_PATH, "train.bin"),
+        "val": os.path.join(FWEB_DATA_PATH, "val.bin"),
     }
+
+
+if __name__ == "__main__":
+    get_fineweb_edu_data("./datasets/")
