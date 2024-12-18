@@ -53,7 +53,7 @@ parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd', 'sgd-with-adam'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in nanoGPT
@@ -95,6 +95,13 @@ parser.add_argument('--mars_beta1', default=0.95, type=float)
 parser.add_argument('--mars_beta2', default=0.99, type=float)
 parser.add_argument('--adafactor_decay_rate', default=-0.8, type=float)
 parser.add_argument('--lamb_use_bias_correction', default=False, type=bool)
+parser.add_argument('--proj_norms', default=False, action='store_true') 
+parser.add_argument('--proj_embeds', default=False, action='store_true')
+parser.add_argument('--proj_logits', default=False, action='store_true')
+parser.add_argument('--sgd_sign_update', default=False, action='store_true')
+parser.add_argument('--sign_norm', default=False, action='store_true')
+parser.add_argument('--normalized', default=False, action='store_true')
+parser.add_argument('--sgd_lr_scale', default=1.0, type=float)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

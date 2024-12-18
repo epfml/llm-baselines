@@ -32,6 +32,7 @@ from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             dd_schedule, wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
+from optim.sgd_with_adam import SGDWithAdam, prepare_proj_params
 from optim.sgdf import SGDF
 from optim.shampoo import DistributedShampoo
 from optim.sign import Signum
@@ -379,6 +380,26 @@ def main(args, parser):
             weight_decay=args.weight_decay,
             nesterov=args.nesterov,
             sign_update=False,
+        )
+    elif args.opt == "sgd-with-adam":
+        param_groups = prepare_proj_params(
+            model,
+            proj_norms=args.proj_norms,
+            proj_embeds=args.proj_embeds,
+            proj_logits=args.proj_logits,
+        )
+        opt = SGDWithAdam(
+            param_groups,
+            lr=args.lr * args.sgd_lr_scale,
+            momentum=args.momentum,
+            dampening=args.dampening,
+            weight_decay=args.weight_decay,
+            nesterov=args.nesterov,
+            sign=args.sgd_sign_update,
+            sign_norm=args.sign_norm,
+            normalized=args.normalized,
+            adam_lr=args.lr,
+            adam_betas=(args.beta1, args.beta2),
         )
     else:
         opt = torch.optim.SGD(
