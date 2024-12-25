@@ -9,10 +9,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import wandb
 
 import config
 import distributed
-import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
 from optim.adafactor import Adafactor
@@ -301,6 +301,7 @@ def main(args, parser):
             betas=(args.beta1, args.beta2),
             eps=1e-6,
             weight_decay=args.weight_decay,
+            decouple=args.adopt_decouple,
         )
     elif args.opt in [
         "clip-adagrad",
@@ -384,6 +385,7 @@ def main(args, parser):
     elif args.opt == "sgd-with-adam":
         param_groups = prepare_proj_params(
             model,
+            args,
             proj_norms=args.proj_norms,
             proj_embeds=args.proj_embeds,
             proj_logits=args.proj_logits,

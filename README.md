@@ -102,6 +102,7 @@ parser.add_argument('--sgd_sign_update', default=False, action='store_true')
 parser.add_argument('--sign_norm', default=False, action='store_true')
 parser.add_argument('--normalized', default=False, action='store_true')
 parser.add_argument('--sgd_lr_scale', default=1.0, type=float)
+parser.add_argument('--adopt_decouple', default=True, type=bool)
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.optim.adamw import AdamW, adamw
-from torch.optim.optimizer import (Optimizer,  # _device_dtype_check_for_fused,
-                                   _default_to_fused_or_foreach,
+from torch.optim.optimizer import Optimizer  # _device_dtype_check_for_fused,
+from torch.optim.optimizer import (_default_to_fused_or_foreach,
                                    _use_grad_for_differentiable)
 
 __all__ = ["SGD", "sgd"]
@@ -151,7 +151,7 @@ class SGDWithSign(torch.optim.Optimizer):  # noqa: D101
         return loss
 
 
-class SGDWithAdam(Optimizer):  # noqa: D101
+class SGDWithAdam(torch.optim.Optimizer):  # noqa: D101
     def __init__(
         self,
         params,
@@ -441,12 +441,13 @@ def _single_tensor_sgd_advanced(
     for i, param in enumerate(params):
         grad = grads[i]
         if sign:
-            grad.sign_()
+            grad = grad.sign()
         param.add_(grad, alpha=-lr)
 
 
 def prepare_proj_params(
     model,
+    cfg,
     target_modules_list=None,
     proj_norms=False,
     proj_embeds=False,
@@ -468,8 +469,17 @@ def prepare_proj_params(
             "key",
             "intermediate.dense",
             "output.dense",
+            "w1",
+            "w2",
+            "c_attn",
+            "c_proj",
         ]
+
     proj_params = []
+
+    if cfg.distributed_backend:
+        model = model.module
+
     for module_name, module in model.named_modules():
         if not isinstance(module, nn.Linear):
             continue
@@ -482,8 +492,8 @@ def prepare_proj_params(
 
     for name, p in model.named_parameters():
         if (
-            ("norm" in name and proj_norms)
-            or ("embed_tokens" in name and proj_embeds)
+            ("ln" in name and proj_norms)
+            or ("wte" in name and proj_embeds)
             or ("lm_head" in name and proj_logits)
         ):
             proj_params.append(p)
@@ -492,6 +502,13 @@ def prepare_proj_params(
     regular_params = [
         p for p in model.parameters() if id(p) not in id_proj_params and p.requires_grad
     ]
+
+    proj_param_count = sum(p.numel() for p in proj_params)
+    regular_param_count = sum(p.numel() for p in regular_params)
+
+    print(f"Use {proj_param_count / 1e6}M projected parameters")
+    print(f"Use {regular_param_count / 1e6}M regular parameters")
+
     return [
         {"params": regular_params, "is_proj_params": False},
         {"params": proj_params, "is_proj_params": True},
