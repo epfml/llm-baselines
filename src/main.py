@@ -564,11 +564,13 @@ def get_exp_name(
         "full_eval_at",
         "distributed_backend",
         "latest_ckpt_interval",
+        "permanent_ckpt_interval",
         "wandb",
         "wandb_project",
         "wandb_entity",
         "batch_size",
         "acc_steps",
+        "adema_alpha_warmup", # temporary remove
         "results_base_folder",
         "run_prefix",
         "wandb_run_prefix",
