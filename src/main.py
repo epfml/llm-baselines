@@ -574,6 +574,8 @@ def get_exp_name(
         "results_base_folder",
         "run_prefix",
         "wandb_run_prefix",
+        "proj_embeds",
+        "proj_norms",
     ],
 ):
     # Get the default values
