@@ -378,7 +378,7 @@ def main(args, parser):
             # ),
         )
     elif args.opt == "adopt":
-        if args.caution:
+        if args.cautious:
             opt = CautiousADOPT(
                 group_specs,
                 lr=args.lr,
@@ -507,7 +507,7 @@ def main(args, parser):
             adam_betas=(args.beta1, args.beta2),
         )
     else:
-        if args.caution:
+        if args.cautious:
             opt = CautiousSignum(
                 group_specs,
                 lr=args.lr,
