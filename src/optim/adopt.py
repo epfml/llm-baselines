@@ -13,10 +13,9 @@ def exists(val):
 from typing import Callable, Optional, Tuple
 
 import torch
-from torch.optim.optimizer import Optimizer
 
 
-class ADOPT(Optimizer):
+class ADOPT(torch.optim.Optimizer):
     def __init__(
         self,
         params,

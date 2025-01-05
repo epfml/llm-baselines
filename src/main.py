@@ -570,7 +570,7 @@ def get_exp_name(
         "wandb_entity",
         "batch_size",
         "acc_steps",
-        "adema_alpha_warmup", # temporary remove
+        "adema_alpha_warmup",  # temporary remove
         "results_base_folder",
         "run_prefix",
         "wandb_run_prefix",
