@@ -646,7 +646,7 @@ class CautiousAdEMAMix(torch.optim.Optimizer):
         return loss
 
 
-class CautiousADOPT(torch.optim.optimizer.Optimizer):
+class CautiousADOPT(torch.optim.Optimizer):
     def __init__(
         self,
         params,
