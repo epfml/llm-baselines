@@ -127,19 +127,28 @@ def main(args, parser):
     args.world_size = distributed_backend.get_world_size()
 
     if args.opt == "adamw":
-        device_type = "cuda" if "cuda" in args.device else "cpu"
-        use_fused = (device_type == "cuda") and (
-            "fused" in inspect.signature(torch.optim.AdamW).parameters
-        )
-        print(f"using fused AdamW: {use_fused}")
-        extra_args = dict(fused=True) if use_fused else dict()
-        opt = torch.optim.AdamW(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            weight_decay=args.weight_decay,
-            **extra_args,
-        )
+        if args.cautious:
+            opt = CautiousAdamW(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                correct_bias=args.correct_bias,
+            )
+        else:
+            device_type = "cuda" if "cuda" in args.device else "cpu"
+            use_fused = (device_type == "cuda") and (
+                "fused" in inspect.signature(torch.optim.AdamW).parameters
+            )
+            print(f"using fused AdamW: {use_fused}")
+            extra_args = dict(fused=True) if use_fused else dict()
+            opt = torch.optim.AdamW(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                **extra_args,
+            )
     elif args.opt == "soap":
         if args.cautious:
             opt = CautiousSOAP(
