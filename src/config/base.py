@@ -172,6 +172,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--normalized", default=False, action="store_true")
     parser.add_argument("--sgd_lr_scale", default=1.0, type=float)
     parser.add_argument("--adopt_decouple", default=True, type=bool)
+    parser.add_argument("--cautious", default=False, type=bool)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
