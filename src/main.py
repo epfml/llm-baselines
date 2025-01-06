@@ -38,7 +38,7 @@ from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgd_with_adam import SGDWithAdam, prepare_proj_params
 from optim.sgdf import SGDF
 from optim.shampoo import DistributedShampoo
-from optim.sign import Signum
+from optim.sign import SignEMAMix, Signum
 from optim.soap import SOAP
 from optim.sophia import SophiaG
 
@@ -514,6 +514,16 @@ def main(args, parser):
             normalized=args.normalized,
             adam_lr=args.lr,
             adam_betas=(args.beta1, args.beta2),
+        )
+    elif args.opt == "signemamix":
+        opt = SignEMAMix(
+            group_specs,
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            alpha=args.adema_alpha,
+            beta2_warmup=args.adema_beta3_warmup,
+            alpha_warmup=args.adema_alpha_warmup,
+            weight_decay=args.weight_decay,
         )
     else:
         if args.cautious:
