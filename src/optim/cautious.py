@@ -172,7 +172,6 @@ class CautiousLion(torch.optim.Optimizer):
 
     @torch.no_grad()
     def step(self, closure: Optional[Callable] = None):
-
         loss = None
         if exists(closure):
             with torch.enable_grad():
@@ -180,7 +179,6 @@ class CautiousLion(torch.optim.Optimizer):
 
         for group in self.param_groups:
             for p in filter(lambda p: exists(p.grad), group["params"]):
-
                 grad, lr, wd, beta1, beta2, state = (
                     p.grad,
                     group["lr"],
@@ -1352,9 +1350,9 @@ class CautiousSOAP(torch.optim.Optimizer):
         """
         Initializes the preconditioner matrices (L and R in the paper).
         """
-        state["GG"] = (
-            []
-        )  # Will hold all the preconditioner matrices (L and R in the paper).
+        state[
+            "GG"
+        ] = []  # Will hold all the preconditioner matrices (L and R in the paper).
         if grad.dim() == 1:
             if not precondition_1d or grad.shape[0] > max_precond_dim:
                 state["GG"].append([])
@@ -1623,7 +1621,6 @@ class CautiousMuon(torch.optim.Optimizer):
         adamw_eps=1e-8,
         adamw_wd=0,
     ):
-
         defaults = dict(
             lr=lr,
             momentum=momentum,
@@ -1661,9 +1658,7 @@ class CautiousMuon(torch.optim.Optimizer):
             self.rank = 0
 
     def step(self):
-
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################

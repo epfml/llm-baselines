@@ -699,6 +699,7 @@ def get_exp_name(
         "wandb_run_prefix",
         "proj_embeds",
         "proj_norms",
+        "log_parameter_norms",
     ],
 ):
     # Get the default values

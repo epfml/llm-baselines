@@ -77,7 +77,6 @@ class Muon(torch.optim.Optimizer):
         adamw_eps=1e-8,
         adamw_wd=0,
     ):
-
         defaults = dict(
             lr=lr,
             momentum=momentum,
@@ -115,9 +114,7 @@ class Muon(torch.optim.Optimizer):
             self.rank = 0
 
     def step(self):
-
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################

@@ -51,6 +51,7 @@ def parse_args(base_parser, args, namespace):
     #     "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
     # )
     parser.add_argument("--wandb_entity", default=None, type=none_or_str)
+    parser.add_argument("--log_parameter_norms", action="store_true")
 
     # Schedule
     parser.add_argument(
@@ -173,6 +174,12 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--sgd_lr_scale", default=1.0, type=float)
     parser.add_argument("--adopt_decouple", default=True, type=bool)
     parser.add_argument("--cautious", default=False, type=bool)
+    parser.add_argument(
+        "--weight_decay_scheduler",
+        default=None,
+        choices=["linear", "cos", "stable-decay", "wsd"],
+    )
+    parser.add_argument("--final_weight_decay", default=0.1, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
