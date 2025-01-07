@@ -555,7 +555,7 @@ def main(args, parser):
                     anneal_strategy=args.scheduler,
                     cycle_momentum=False,
                     div_factor=1e2,
-                    final_div_factor=1,
+                    final_div_factor=args.final_div_factor,
                 )
                 if args.opt != "muon"
                 else CombinedScheduler(opt, args)
@@ -693,13 +693,11 @@ def get_exp_name(
         "wandb_entity",
         "batch_size",
         "acc_steps",
-        "adema_alpha_warmup",  # temporary remove
         "results_base_folder",
         "run_prefix",
         "wandb_run_prefix",
         "proj_embeds",
         "proj_norms",
-        "log_parameter_norms",
     ],
 ):
     # Get the default values
