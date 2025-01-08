@@ -200,6 +200,7 @@ def parse_args(base_parser, args, namespace):
             "redpajamav2",
             "fineweb",
             "finewebedu",
+            "c4",
         ],
     )
     parser.add_argument(
