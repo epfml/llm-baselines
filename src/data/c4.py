@@ -13,7 +13,7 @@ def get_c4_data(datasets_base_dir, num_proc=40):
     C4_DATA_PATH = os.path.join(datasets_base_dir, "c4/")
     if not os.path.exists(os.path.join(C4_DATA_PATH, "train.bin")):
         os.makedirs(C4_DATA_PATH, exist_ok=True)
-        
+
         dataset = load_dataset("allenai/c4", "en")
 
         split_dataset = dataset["train"].train_test_split(
@@ -22,8 +22,12 @@ def get_c4_data(datasets_base_dir, num_proc=40):
         split_dataset["val"] = split_dataset.pop("test")
 
         def process(example):
-            ids = tknzr.encode_ordinary(example["text"]) # encode_ordinary ignores any special tokens
-            ids.append(tknzr.eot_token)  # add the end of text token, e.g. 50256 for gpt2 bpe
+            ids = tknzr.encode_ordinary(
+                example["text"]
+            )  # encode_ordinary ignores any special tokens
+            ids.append(
+                tknzr.eot_token
+            )  # add the end of text token, e.g. 50256 for gpt2 bpe
             # note: I think eot should be prepended not appended... hmm. it's called "eot" though...
             out = {"ids": ids, "len": len(ids)}
             return out

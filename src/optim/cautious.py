@@ -1350,9 +1350,9 @@ class CautiousSOAP(torch.optim.Optimizer):
         """
         Initializes the preconditioner matrices (L and R in the paper).
         """
-        state[
-            "GG"
-        ] = []  # Will hold all the preconditioner matrices (L and R in the paper).
+        state["GG"] = (
+            []
+        )  # Will hold all the preconditioner matrices (L and R in the paper).
         if grad.dim() == 1:
             if not precondition_1d or grad.shape[0] > max_precond_dim:
                 state["GG"].append([])
