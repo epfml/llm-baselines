@@ -111,14 +111,21 @@ class Adam_mini(torch.optim.Optimizer):
         # Output layers. Use one lr per token
         self.output_names = {"lm_head", "output", "final_layer"}
         # Query and Keys. User one lr per head
-        self.wqk_names = {"k_proj", "q_proj", "wq", "wk", "query", "key"}
+        self.wqk_names = {"k_proj", "q_proj", "wq", "wk", "query", "key", "c_attn"}
         # Values. Use one lr per neuron
         # it is also okay to set self.wv_names to be empty and use a single lr for the whole v. But be cautious that this will bring extra all_reduce operations
         self.wv_names = {"v_proj", "wv", "value"}
         # attn_proj. Use one lr per neuron
-        self.attn_proj_names = {"o_proj", "wo", "attn.proj"}
+        self.attn_proj_names = {"o_proj", "wo", "attn.proj", "attn.c_proj"}
         # MLPs. Use one lr per neuron
-        self.mlp_names = {"feed_forward", "linear", "mlp"}
+        self.mlp_names = {
+            "feed_forward",
+            "linear",
+            "mlp",
+            "mlp.w1",
+            "mlp.w2",
+            "mlp.c_proj",
+        }
         # Blocks that use Adam: bias terms
         self.adam_block_names = {"bias"}
 
@@ -363,7 +370,7 @@ class Adam_mini(torch.optim.Optimizer):
                 else:  # other blocks. By default, this is for LayerNorms. Sometimes it is also fine to put Value here
                     if len(state) == 0:
                         block_numel = (
-                            torch.tensor(p.numel()).to(torch.float32).to(device)
+                            torch.tensor(p.numel()).to(torch.float32).to(self.device)
                         )
                         reduced = False
                         if self.world_size > 1:
