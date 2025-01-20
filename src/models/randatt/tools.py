@@ -108,6 +108,8 @@ def permute_sequence(x, index):
     #
     # Align the dimension of index to that of x
     #
+    index = index.to(x.device)
+
     index = index.unsqueeze(-1)
     index = index.repeat(len(index.shape[:-1]) * (1,) + (x.shape[-1],))
 
@@ -123,6 +125,10 @@ def permute_matrix(X, left_index, right_index):
     #
     # Align the dimension of index to that of X
     #
+    device = X.device
+    left_index = left_index.to(device)
+    right_index = right_index.to(device)
+
     left_index = left_index.unsqueeze(-1)
     left_index = left_index.repeat(len(left_index.shape[:-1]) * (1,) + (X.shape[-2],))
 
