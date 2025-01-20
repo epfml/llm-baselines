@@ -157,8 +157,9 @@ class GPTBase(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.sequence_length, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([block_cls(config.n_embd, block_dim=config.block_dim, 
-                                       n_heads=config.n_head, dropout_rate=config.dropout) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([block_cls(
+            config.n_embd,
+            block_dim=config.block_dim if block_cls == LightEncoderBlock else None, n_heads=config.n_head,dropout_rate=config.dropout) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
 
