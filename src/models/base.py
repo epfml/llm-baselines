@@ -126,7 +126,12 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x_attn = self.attn(self.ln_1(x))
+        # Handle tuple output from LightEncoderBlock
+        if isinstance(self.attn_block, LightEncoderBlock):
+            x_attn, _, _ = self.attn_block(self.ln_1(x))
+        else:
+            x_attn = self.attn_block(self.ln_1(x))
+
         x = x + x_attn
         x = x + self.mlp(self.ln_2(x))
         return x
