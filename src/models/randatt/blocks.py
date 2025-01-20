@@ -75,6 +75,15 @@ class EncoderBlock(nn.Module):
 
     def forward(self, x, mask=None, shift=None):
 
+        device = x.device  # Ensure new tensors align with `x`
+
+        # Update tensors to use the same device
+        if mask is not None:
+            mask = mask.to(device)
+        if shift is not None:
+            shift = shift.to(device)
+
+
         x, keys, values = self.attention_fn(x, mask, shift)
         x = self.mlp_fn(x)
         

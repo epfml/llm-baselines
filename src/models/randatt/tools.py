@@ -36,10 +36,12 @@ def causal_mask(x, until=None):
     """
     N = x.shape[-2]
     
+    device = x.device  # Ensure the mask is created on the same device
+
     #
     # Create the mask
     #
-    r = torch.arange(N)
+    r = torch.arange(N, device=device)
     mask = 1. * (r[:, None] >= r[None, :])
 
     if until is not None:
@@ -59,11 +61,11 @@ def alibi_shift(x):
     that will be subtracted from attention logits, following the ALiBi formula.
     """
     N = x.shape[-2]
-    
+    device = x.device
     #
     # Create the shift
     #
-    r = torch.arange(N)
+    r = torch.arange(N, device=device)
     shift = torch.abs(r[:, None] - r[None, :])
 
     #
@@ -106,8 +108,6 @@ def permute_sequence(x, index):
     #
     # Align the dimension of index to that of x
     #
-    device = x.device
-    index = index.to(device)
     index = index.unsqueeze(-1)
     index = index.repeat(len(index.shape[:-1]) * (1,) + (x.shape[-1],))
 
