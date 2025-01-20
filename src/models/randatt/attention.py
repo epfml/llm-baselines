@@ -127,6 +127,8 @@ class RandomBlockSelfAttention(SelfAttention):
         #
         # Get the input sequence size and the number of blocks
         #
+        device = x.device
+
         seq_size= x.shape[-2]
         n_blocks = math.ceil(seq_size / self.block_dim)
 
@@ -135,8 +137,12 @@ class RandomBlockSelfAttention(SelfAttention):
         #
         seq_full = n_blocks * self.block_dim
         pad_dims = 3 * (0,) + (seq_full - seq_size,)
-        x_pad = F.pad(x, pad_dims)
+        x_pad = F.pad(x, pad_dims).to(device)
    
+        if mask is not None:
+            mask = F.pad(mask, (0, seq_full - seq_size)).to(device)
+        if shift is not None:
+            shift = F.pad(shift, (0, seq_full - seq_size)).to(device)
 
         #
         # Pad also the mask and the shift if they are meant to be used
@@ -148,13 +154,13 @@ class RandomBlockSelfAttention(SelfAttention):
         #
         # Get random permutations of the sequence indexes
         #
-        randvals = torch.rand(x_pad.shape[:-1])
+        randvals = torch.rand(x_pad.shape[:-1],device=device)
         rand_indexes = torch.argsort(randvals, dim=-1)
 
         #
         # Align them with the modeled sequence and it split across heads
         #
-        indexes_model = rand_indexes.unsqueeze(-1).repeat(len(x.shape[:-1]) * (1,) + (self.model_dim,))
+        indexes_model = rand_indexes.unsqueeze(-1).repeat(len(x.shape[:-1]) * (1,) + (self.model_dim,)).to(device)
         indexes_heads = torch.stack(
             torch.chunk(indexes_model, self.n_heads, dim=-1)
         )
@@ -207,7 +213,7 @@ class RandomBlockSelfAttention(SelfAttention):
         k = k[..., :seq_size, :]
         v = v[..., :seq_size, :]
 
-        return o, k, v
+        return o.to(device), k.to(device), v.to(device)
 
 
 
