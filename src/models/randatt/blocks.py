@@ -39,7 +39,7 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU()):
+    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None):
 
         super().__init__()
 
