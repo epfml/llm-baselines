@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from randatt.blocks import EncoderBlock, LightEncoderBlock
+from .randatt.blocks import EncoderBlock, LightEncoderBlock
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
