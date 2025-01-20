@@ -106,6 +106,8 @@ def permute_sequence(x, index):
     #
     # Align the dimension of index to that of x
     #
+    device = x.device
+    index = index.to(device)
     index = index.unsqueeze(-1)
     index = index.repeat(len(index.shape[:-1]) * (1,) + (x.shape[-1],))
 
