@@ -110,13 +110,13 @@ class Block(nn.Module):
             self.attn_block = LightEncoderBlock(
                 model_dim=config.n_embd,
                 block_dim=config.block_dim,
-                n_heads=config.n_heads,
+                n_head=config.n_head,
                 dropout_rate=config.dropout,
             )
         else:
             self.attn_block = EncoderBlock(
                 model_dim=config.n_embd,
-                n_heads=config.n_heads,
+                n_head=config.n_head,
                 dropout_rate=config.dropout,
             )
 
