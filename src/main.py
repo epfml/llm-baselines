@@ -22,6 +22,9 @@ def get_args():
 
     args, rem_args = parser.parse_known_args()
 
+    print("Initial Args:", vars(args))
+    print("Remaining Args:", rem_args)
+
     return config.parse_args_with_format(format=args.config_format, base_parser=parser, args=rem_args, namespace=args)
 
 
