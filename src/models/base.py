@@ -126,7 +126,8 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn_block(self.ln_1(x))
+        x_attn, _, _ = self.attn_block(self.ln_1(x))
+        x = x + x_attn
         x = x + self.mlp(self.ln_2(x))
         return x
     
