@@ -63,7 +63,7 @@ class EncoderBlock(nn.Module):
         att = self.drop_att(att)
         x = self.norm1(x + att)
 
-        return x#, keys, values
+        return x, keys, values
 
     def mlp_fn(self, x):    
         
@@ -87,7 +87,7 @@ class EncoderBlock(nn.Module):
         x, keys, values = self.attention_fn(x, mask, shift)
         x = self.mlp_fn(x)
         
-        return x, keys, values 
+        return x#, keys, values 
 
 
 class DecoderBlock(EncoderBlock):
