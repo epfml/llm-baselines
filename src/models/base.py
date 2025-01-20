@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from randatt.blocks import EncoderBlock, LightEncoderBlock
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -99,8 +100,28 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
+        print(f"Initializing Block with attention_type={config.attention_type} and block_dim={config.block_dim}")
+
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        #self.attn = CausalSelfAttention(config)
+
+        # Choose block type based on attention type
+        if config.attention_type == 'random_block':
+            self.attn_block = LightEncoderBlock(
+                model_dim=config.n_embd,
+                block_dim=config.block_dim,
+                n_heads=config.n_heads,
+                dropout_rate=config.dropout,
+            )
+        else:
+            self.attn_block = EncoderBlock(
+                model_dim=config.n_embd,
+                n_heads=config.n_heads,
+                dropout_rate=config.dropout,
+            )
+
+
+
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
