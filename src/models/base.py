@@ -103,22 +103,22 @@ class Block(nn.Module):
         print(f"Initializing Block with attention_type={config.attention_type} and block_dim={config.block_dim}")
 
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        #self.attn = CausalSelfAttention(config)
+        self.attn = CausalSelfAttention(config)
 
         # Choose block type based on attention type
-        if config.attention_type == 'random_block':
-            self.attn_block = LightEncoderBlock(
-                model_dim=config.n_embd,
-                block_dim=config.block_dim,
-                n_heads=config.n_head,
-                dropout_rate=config.dropout,
-            )
-        else:
-            self.attn_block = EncoderBlock(
-                model_dim=config.n_embd,
-                n_heads=config.n_head,
-                dropout_rate=config.dropout,
-            )
+        # if config.attention_type == 'random_block':
+        #     self.attn_block = LightEncoderBlock(
+        #         model_dim=config.n_embd,
+        #         block_dim=config.block_dim,
+        #         n_heads=config.n_head,
+        #         dropout_rate=config.dropout,
+        #     )
+        # else:
+        #     self.attn_block = EncoderBlock(
+        #         model_dim=config.n_embd,
+        #         n_heads=config.n_head,
+        #         dropout_rate=config.dropout,
+        #     )
 
 
 
@@ -126,7 +126,7 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x_attn, _, _ = self.attn_block(self.ln_1(x))
+        x_attn = self.attn(self.ln_1(x))
         x = x + x_attn
         x = x + self.mlp(self.ln_2(x))
         return x
@@ -140,12 +140,20 @@ class GPTBase(nn.Module):
         assert config.sequence_length is not None
         self.config = config
         self.tokenizer = tiktoken.get_encoding("gpt2")
+        # Select block type based on config
+        if config.attention_type == "random_block":
+            block_cls = LightEncoderBlock
+        elif config.attention_type == "self":
+            block_cls = EncoderBlock
+        else:
+            block_cls = Block  # Default fallback or custom Block type
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.sequence_length, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([block_cls(config.n_embd, block_dim=config.block_dim, 
+                                       n_heads=config.n_head, dropout_rate=config.dropout) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
 
