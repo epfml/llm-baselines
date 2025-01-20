@@ -126,8 +126,9 @@ class RandomBlockSelfAttention(SelfAttention):
 
         #
         # Get the input sequence size and the number of blocks
-        #
-        device = x.device
+        # 
+        a, _, _ =x
+        device = a.device
 
         seq_size= x.shape[-2]
         n_blocks = math.ceil(seq_size / self.block_dim)
