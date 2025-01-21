@@ -126,6 +126,8 @@ def permute_matrix(X, left_index, right_index):
     # Align the dimension of index to that of X
     #
     device = X.device
+    assert X.size(-2) == left_index.size(-2), "Mismatch in rows"
+    assert X.size(-1) == right_index.size(-1), "Mismatch in columns"
     left_index = left_index.to(device)
     right_index = right_index.to(device)
 
