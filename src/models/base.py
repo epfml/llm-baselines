@@ -190,7 +190,7 @@ class GPTBase(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             mask = causal_mask(x)
-            x = block(x)
+            x = block(x, mask=mask)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
