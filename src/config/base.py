@@ -59,7 +59,7 @@ def parse_args(base_parser, args, namespace):
                         choices=distributed.registered_backends())  # distributed backend type
     parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
 
-    parser.add_argument('--attention_type', default='self', choices=['self', 'random_block'], help='Type of attention to use')
+    parser.add_argument('--attention_type', default='base', choices=['base','self', 'random_block'], help='Type of attention to use')
     parser.add_argument('--block_dim', type=int, default=100, help='Block size for random block attention')
 
 

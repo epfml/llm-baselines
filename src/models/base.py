@@ -150,7 +150,7 @@ class GPTBase(nn.Module):
             block_cls = LightEncoderBlock
         elif config.attention_type == "self":
             block_cls = EncoderBlock
-        else:
+        elif config.attention_type == "base":
             block_cls = Block  # Default fallback or custom Block type
 
         self.transformer = nn.ModuleDict(dict(
