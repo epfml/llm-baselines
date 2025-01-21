@@ -86,7 +86,7 @@ class MLP(nn.Module):
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        self.activation = nn.GELU()
+        self.activation = nn.ReLU()#nn.GELU()
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -100,7 +100,7 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        print(f"Initializing Block with attention_type={config.attention_type} and block_dim={config.block_dim}")
+        print(f"Initializing Block with attention_type={config.attention_type}")
 
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn_block = CausalSelfAttention(config)
@@ -108,12 +108,7 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
-        # Handle tuple output from LightEncoderBlock
-        if isinstance(self.attn_block, LightEncoderBlock):
-            x_attn, _, _ = self.attn_block(self.ln_1(x))
-        else:
-            x_attn = self.attn_block(self.ln_1(x))
-
+        x_attn = self.attn_block(self.ln_1(x))
         x = x + x_attn
         x = x + self.mlp(self.ln_2(x))
         return x
