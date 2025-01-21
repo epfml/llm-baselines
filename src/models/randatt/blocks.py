@@ -12,7 +12,7 @@ from .tools import causal_mask, alibi_shift
 
 class MLP(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.ReLU()):
+    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.ReLU(), dropout_rate=0.1):
 
     #     super().__init__()
         
