@@ -98,7 +98,7 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, block_dim=None):
         super().__init__()
         print(f"Initializing Block with attention_type={config.attention_type} and block_dim={config.block_dim}")
 
