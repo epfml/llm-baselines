@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from .randatt.blocks import EncoderBlock, LightEncoderBlock
+from .randatt.tools import causal_mask, alibi_shift
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -188,6 +189,7 @@ class GPTBase(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
+            mask = causal_mask(x)
             x = block(x)
         x = self.transformer.ln_f(x)
 
