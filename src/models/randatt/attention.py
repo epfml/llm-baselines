@@ -165,6 +165,10 @@ class RandomBlockSelfAttention(SelfAttention):
             torch.chunk(indexes_model, self.n_heads, dim=-1)
         )
 
+        print(f"Mask pad shape: {mask_pad.shape if mask_pad is not None else 'None'}")
+        print(f"Rand indexes shape: {rand_indexes.shape}")
+        print(f"Pad dims: {pad_dims}")
+
         #
         # Permute inputs to attention
         #
