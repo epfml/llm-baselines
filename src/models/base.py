@@ -98,7 +98,7 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config, block_dim=None):
+    def __init__(self, config):
         super().__init__()
         print(f"Initializing Block with attention_type={config.attention_type} and block_dim={config.block_dim}")
 
@@ -139,7 +139,7 @@ class GPTBase(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.sequence_length, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([block_cls(
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]) if config.attention_type == "base" else nn.ModuleList([block_cls(
             config.n_embd,
             block_dim=config.block_dim if block_cls == LightEncoderBlock else None, n_heads=config.n_head,dropout_rate=config.dropout) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
