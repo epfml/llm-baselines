@@ -36,8 +36,8 @@ class MLP(nn.Module):
     #     return self.model(x)
         super().__init__()
         self.input_dim = input_dim
-        self.output_dim = output_dim or input_dim  # Output defaults to input_dim
-        self.hidden_dim = hidden_dim or 4 * input_dim  # Hidden dimension defaults to 4 * input_dim
+        self.output_dim = output_dim   # Output defaults to input_dim
+        self.hidden_dim = 4 * input_dim  # Hidden dimension defaults to 4 * input_dim
         self.act = act
         self.dropout = nn.Dropout(dropout_rate)
 
