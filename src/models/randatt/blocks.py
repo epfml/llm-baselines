@@ -77,7 +77,9 @@ class EncoderBlock(nn.Module):
         self.drop_mlp = nn.Dropout(dropout_rate)
 
     def attention_fn(self, x, mask=None, shift=None):
-   
+        if mask is None:
+            seq_len = x.size(1)  # Sequence length
+            mask = causal_mask(seq_len).to(x.device)
         att, keys, values = self.attention(x, mask=mask, shift=shift)
         att = self.drop_att(att)
         x = self.norm1(x + att)
