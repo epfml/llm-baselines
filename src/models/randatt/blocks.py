@@ -12,47 +12,29 @@ from .tools import causal_mask, alibi_shift
 
 class MLP(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.ReLU(), dropout_rate=0.1):
+    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.ReLU()):
 
-    #     super().__init__()
-        
-    #     self.input_dim = input_dim 
-    #     self.output_dim = output_dim
-    #     self.hidden_dim = hidden_dim 
-    #     self.act = act 
-
-    #     self.model = nn.Sequential()
-    #     hidden_dim = (input_dim,) + hidden_dim 
-
-    #     for i in range(len(hidden_dim) - 1):
-
-    #         self.model.append(nn.Linear(hidden_dim[i], hidden_dim[i+1]))
-    #         self.model.append(act)
-        
-    #     self.model.append(nn.Linear(hidden_dim[-1], output_dim))
-    
-    # def forward(self, x):
-
-    #     return self.model(x)
         super().__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim   # Output defaults to input_dim
-        self.hidden_dim = hidden_dim[0]  # Hidden dimension defaults to 4 * input_dim
-        self.act = act
-        self.dropout = nn.Dropout(dropout_rate)
+        
+        self.input_dim = input_dim 
+        self.output_dim = output_dim
+        self.hidden_dim = hidden_dim 
+        self.act = act 
 
-        # Linear layers
-        self.fc_in = nn.Linear(self.input_dim, self.hidden_dim)
-        self.fc_out = nn.Linear(self.hidden_dim, self.output_dim)
+        self.model = nn.Sequential()
+        hidden_dim = (input_dim,) + hidden_dim 
 
+        for i in range(len(hidden_dim) - 1):
+
+            self.model.append(nn.Linear(hidden_dim[i], hidden_dim[i+1]))
+            self.model.append(act)
+        
+        self.model.append(nn.Linear(hidden_dim[-1], output_dim))
+    
     def forward(self, x):
-        # MLP with activation and dropout
-        x = self.fc_in(x)
-        x = self.act(x)
-        x = self.dropout(x)
-        x = self.fc_out(x)
-        x = self.dropout(x)
-        return x
+
+        return self.model(x)
+
 
 
 
@@ -77,9 +59,6 @@ class EncoderBlock(nn.Module):
         self.drop_mlp = nn.Dropout(dropout_rate)
 
     def attention_fn(self, x, mask=None, shift=None):
-        if mask is None:
-            mask = causal_mask(x)
-            mask = mask.to(x.device)
         att, keys, values = self.attention(x, mask=mask, shift=shift)
         att = self.drop_att(att)
         x = self.norm1(x + att)
