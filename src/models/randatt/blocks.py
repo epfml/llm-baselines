@@ -59,16 +59,17 @@ class EncoderBlock(nn.Module):
         self.drop_mlp = nn.Dropout(dropout_rate)
 
     def attention_fn(self, x, mask=None, shift=None):
-        att, keys, values = self.attention(self.norm1(x), mask=mask, shift=shift)
-        att = self.drop_att(att)
+        x = self.norm1(x)
+        att, keys, values = self.attention(x, mask=mask, shift=shift)
+        #att = self.drop_att(att)
         #x = self.norm1(x + att)
         x = x + att
         return x, keys, values
 
     def mlp_fn(self, x):    
-        
-        x_mlp = self.mlp(self.norm2(x))
-        x_mlp = self.drop_mlp(x)
+        x = self.norm2(x)
+        x_mlp = self.mlp(x)
+        #x_mlp = self.drop_mlp(x)
         #x = self.norm2(x + x_mlp)
         x = x + x_mlp
         return x
