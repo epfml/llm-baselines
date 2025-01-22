@@ -189,8 +189,8 @@ class GPTBase(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            mask = causal_mask(x)
-            x = block(x, mask=mask)
+            #mask = causal_mask(x)
+            x = block(x)#, mask=mask)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
