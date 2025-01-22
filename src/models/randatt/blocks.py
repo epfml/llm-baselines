@@ -12,7 +12,7 @@ from .tools import causal_mask, alibi_shift
 
 class MLP(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.ReLU()):
+    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.GELU()):
 
         super().__init__()
         
@@ -69,8 +69,8 @@ class EncoderBlock(nn.Module):
         
         x_mlp = self.mlp(x)
         x_mlp = self.drop_mlp(x)
-        x = self.norm2(x + x_mlp)
-
+        #x = self.norm2(x + x_mlp)
+        x = x + x_mlp
         return x
 
     def forward(self, x, mask=None, shift=None):
