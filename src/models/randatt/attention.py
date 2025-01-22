@@ -139,10 +139,10 @@ class RandomBlockSelfAttention(SelfAttention):
         pad_dims = 3 * (0,) + (seq_full - seq_size,)
         x_pad = F.pad(x, pad_dims).to(device)
    
-        if mask is not None:
-            mask = F.pad(mask, (0, seq_full - seq_size)).to(device)
-        if shift is not None:
-            shift = F.pad(shift, (0, seq_full - seq_size)).to(device)
+        # if mask is not None:
+        #     mask = F.pad(mask, (0, seq_full - seq_size)).to(device)
+        # if shift is not None:
+        #     shift = F.pad(shift, (0, seq_full - seq_size)).to(device)
 
         #
         # Pad also the mask and the shift if they are meant to be used
