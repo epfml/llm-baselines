@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from .randatt.blocks import DecoderBlock, LightDecoderBlock
+from .randatt.blocks import EncoderBlock, LightEncoderBlock
 from .randatt.tools import causal_mask, alibi_shift
 
 class LayerNorm(nn.Module):
@@ -125,9 +125,9 @@ class GPTBase(nn.Module):
         self.tokenizer = tiktoken.get_encoding("gpt2")
         # Select block type based on config
         if config.attention_type == "random_block":
-            block_cls = LightDecoderBlock
+            block_cls = LightEncoderBlock
         elif config.attention_type == "self":
-            block_cls = DecoderBlock
+            block_cls = EncoderBlock
         elif config.attention_type == "base":
             block_cls = Block  # Default fallback or custom Block type
 
@@ -137,7 +137,7 @@ class GPTBase(nn.Module):
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]) if config.attention_type == "base" else nn.ModuleList([block_cls(
             config.n_embd,
-            block_dim=config.block_dim if block_cls == LightDecoderBlock else None, n_heads=config.n_head,dropout_rate=config.dropout) for _ in range(config.n_layer)]),
+            block_dim=config.block_dim if block_cls == LightEncoderBlock else None, n_heads=config.n_head,dropout_rate=config.dropout) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
 
