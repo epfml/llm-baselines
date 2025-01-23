@@ -8,11 +8,23 @@ from torch.autograd import Variable
 from .attention import SelfAttention, CrossAttention, RandomBlockSelfAttention, RandomBlockCrossAttention
 from .tools import causal_mask, alibi_shift
 
+from torch.nn import functional as F
+
+class LayerNorm(nn.Module):
+    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+
+    def __init__(self, ndim, bias):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
 class MLP(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.GELU()):
+    def __init__(self, input_dim, output_dim, hidden_dim = (256,), act=nn.GELU(), bias: bool = False):
 
         super().__init__()
         
@@ -26,10 +38,10 @@ class MLP(nn.Module):
 
         for i in range(len(hidden_dim) - 1):
 
-            self.model.append(nn.Linear(hidden_dim[i], hidden_dim[i+1]))
+            self.model.append(nn.Linear(hidden_dim[i], hidden_dim[i+1], bias=bias))
             self.model.append(act)
         
-        self.model.append(nn.Linear(hidden_dim[-1], output_dim))
+        self.model.append(nn.Linear(hidden_dim[-1], output_dim, bias=bias))
     
     def forward(self, x):
 
@@ -40,7 +52,7 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None):
+    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False):
 
         super().__init__()
 
@@ -48,15 +60,29 @@ class EncoderBlock(nn.Module):
         self.n_heads = n_heads
         self.dropout_rate = dropout_rate 
         self.act = act 
-
-        self.attention = SelfAttention(model_dim, n_heads, act)
+        self.bias= bias
+        self.attention = SelfAttention(model_dim, n_heads, act, bias= bias)
         self.mlp = MLP(model_dim, model_dim, 1 * (4*model_dim, ))
 
-        self.norm1 = nn.LayerNorm(model_dim)
-        self.norm2 = nn.LayerNorm(model_dim)
+        self.norm1 = LayerNorm(model_dim, bias = bias)
+        self.norm2 = LayerNorm(model_dim, bias = bias)
 
         self.drop_att = nn.Dropout(dropout_rate)
         self.drop_mlp = nn.Dropout(dropout_rate)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        elif isinstance(module, LayerNorm):  # Handle LayerNorm explicitly
+            torch.nn.init.ones_(module.weight)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
 
     def attention_fn(self, x, mask=None, shift=None):
         att, keys, values = self.attention(self.norm1(x), mask=mask, shift=shift)
@@ -119,10 +145,10 @@ class DecoderBlock(EncoderBlock):
 
 class LightEncoderBlock(EncoderBlock):
 
-    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU()):
+    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False):
         print(f"Initializing LightEncoderBlock with block_dim={block_dim}")
-        super().__init__(model_dim, n_heads, dropout_rate, act)
-        self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act)
+        super().__init__(model_dim, n_heads, dropout_rate, act, bias)
+        self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias)
 
 
 class LightDecoderBlock(DecoderBlock):
