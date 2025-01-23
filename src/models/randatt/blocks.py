@@ -62,7 +62,7 @@ class EncoderBlock(nn.Module):
         self.act = act 
         self.bias= bias
         self.attention = SelfAttention(model_dim, n_heads, act, bias= bias)
-        self.mlp = MLP(model_dim, model_dim, 1 * (4*model_dim, ))
+        self.mlp = MLP(model_dim, model_dim, 1 * (4*model_dim, ), bias = bias)
 
         self.norm1 = LayerNorm(model_dim, bias = bias)
         self.norm2 = LayerNorm(model_dim, bias = bias)
@@ -70,19 +70,19 @@ class EncoderBlock(nn.Module):
         self.drop_att = nn.Dropout(dropout_rate)
         self.drop_mlp = nn.Dropout(dropout_rate)
 
-        self.apply(self._init_weights)
+    #     self.apply(self._init_weights)
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-        elif isinstance(module, LayerNorm):  # Handle LayerNorm explicitly
-            torch.nn.init.ones_(module.weight)
-            if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+    # def _init_weights(self, module):
+    #     if isinstance(module, nn.Linear):
+    #         torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    #         if module.bias is not None:
+    #             torch.nn.init.zeros_(module.bias)
+    #     elif isinstance(module, nn.Embedding):
+    #         torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    #     elif isinstance(module, LayerNorm):  # Handle LayerNorm explicitly
+    #         torch.nn.init.ones_(module.weight)
+    #         if module.bias is not None:
+    #             torch.nn.init.zeros_(module.bias)
 
     def attention_fn(self, x, mask=None, shift=None):
         att, keys, values = self.attention(self.norm1(x), mask=mask, shift=shift)
@@ -147,8 +147,8 @@ class LightEncoderBlock(EncoderBlock):
 
     def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False):
         print(f"Initializing LightEncoderBlock with block_dim={block_dim}")
-        super().__init__(model_dim, n_heads, dropout_rate, act, bias)
-        self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias)
+        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias )
+        self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias= bias)
 
 
 class LightDecoderBlock(DecoderBlock):
