@@ -18,16 +18,9 @@ from torch.nn import functional as F
 from .randatt.blocks import EncoderBlock, LightEncoderBlock
 from .randatt.tools import causal_mask, alibi_shift
 
-class LayerNorm(nn.Module):
-    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+from .tools import LayerNorm
 
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
 
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
 class CausalSelfAttention(nn.Module):
@@ -241,8 +234,6 @@ class GPTBase(nn.Module):
         # need to do import here to avoid circular import (since llama imports from base here)
         from .utils import BLACKLIST_WEIGHT_MODULES
 
-        blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm)  # Include
-
 
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
@@ -260,9 +251,13 @@ class GPTBase(nn.Module):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
-                elif pn.endswith("weight") and isinstance(m, LayerNorm):
-                    # weights of blacklist modules will NOT be weight decayed
+
+        for mn, m in self.named_modules():
+            if isinstance(m, LayerNorm):  # Match your custom LayerNorm explicitly
+                for pn, p in m.named_parameters():
+                    fpn = f"{mn}.{pn}" if mn else pn
                     no_decay.add(fpn)
+
 
         # subtle: 'transformer.wte.weight' and 'lm_head.weight' are tied, so they
         # will appear in the no_decay and decay sets respectively after the above.
