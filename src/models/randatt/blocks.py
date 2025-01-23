@@ -9,7 +9,7 @@ from .attention import SelfAttention, CrossAttention, RandomBlockSelfAttention, 
 from .tools import causal_mask, alibi_shift
 
 
-from ..base import LayerNorm
+from ..tools import LayerNorm
 
 
 class MLP(nn.Module):
