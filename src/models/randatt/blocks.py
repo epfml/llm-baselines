@@ -70,19 +70,6 @@ class EncoderBlock(nn.Module):
         self.drop_att = nn.Dropout(dropout_rate)
         self.drop_mlp = nn.Dropout(dropout_rate)
 
-    #     self.apply(self._init_weights)
-
-    # def _init_weights(self, module):
-    #     if isinstance(module, nn.Linear):
-    #         torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    #         if module.bias is not None:
-    #             torch.nn.init.zeros_(module.bias)
-    #     elif isinstance(module, nn.Embedding):
-    #         torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-    #     elif isinstance(module, LayerNorm):  # Handle LayerNorm explicitly
-    #         torch.nn.init.ones_(module.weight)
-    #         if module.bias is not None:
-    #             torch.nn.init.zeros_(module.bias)
 
     def attention_fn(self, x, mask=None, shift=None):
         att, keys, values = self.attention(self.norm1(x), mask=mask, shift=shift)
