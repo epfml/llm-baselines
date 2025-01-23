@@ -46,7 +46,7 @@ def attention(q, k, v, mask=None, shift=None):
 
 class SelfAttention(nn.Module):
 
-    def __init__(self, model_dim: int, n_heads: int = 2, act: Callable = nn.GELU()):
+    def __init__(self, model_dim: int, n_heads: int = 2, act: Callable = nn.GELU(), bias: bool = False):
 
         super().__init__()
 
@@ -54,8 +54,8 @@ class SelfAttention(nn.Module):
         self.n_heads = n_heads
         self.act = act 
 
-        self.lin = nn.Linear(model_dim, 3 * model_dim)
-        self.lin_out = nn.Identity() if n_heads == 1 else nn.Linear(model_dim, model_dim)
+        self.lin = nn.Linear(model_dim, 3 * model_dim, bias=bias)
+        self.lin_out = nn.Identity() if n_heads == 1 else nn.Linear(model_dim, model_dim,bias=bias)
 
 
     def forward(self, x, mask=None, shift=None):
@@ -116,9 +116,9 @@ class SelfAttention(nn.Module):
 
 class RandomBlockSelfAttention(SelfAttention):
 
-    def __init__(self, model_dim: int, block_dim: int = 100, n_heads: int = 2, act: Callable = nn.GELU()):
+    def __init__(self, model_dim: int, block_dim: int = 100, n_heads: int = 2, act: Callable = nn.GELU(), bias: bool = False):
 
-        super().__init__(model_dim, n_heads, act)
+        super().__init__(model_dim, n_heads, act, bias)
 
         self.block_dim = block_dim
 
@@ -223,11 +223,11 @@ class RandomBlockSelfAttention(SelfAttention):
 
 class CrossAttention(SelfAttention):
 
-    def __init__(self, model_dim: int, n_heads: int = 2, act: Callable = nn.GELU()):
+    def __init__(self, model_dim: int, n_heads: int = 2, act: Callable = nn.GELU(), bias: bool = False):
 
-        super().__init__(model_dim, n_heads, act)
+        super().__init__(model_dim, n_heads, act, bias)
         
-        self.lin = nn.Linear(model_dim, model_dim)
+        self.lin = nn.Linear(model_dim, model_dim, bias = bias)
 
     def forward(self, x, k, v, mask=None, shift=None):
 
@@ -267,9 +267,9 @@ class CrossAttention(SelfAttention):
 
 class RandomBlockCrossAttention(CrossAttention):
 
-    def __init__(self, model_dim: int, block_dim: int = 100, n_heads: int = 2, act: Callable = nn.GELU()):
+    def __init__(self, model_dim: int, block_dim: int = 100, n_heads: int = 2, act: Callable = nn.GELU(), bias: bool = False):
 
-        super().__init__(model_dim, n_heads, act)
+        super().__init__(model_dim, n_heads, act, bias)
 
         self.block_dim = block_dim
     
