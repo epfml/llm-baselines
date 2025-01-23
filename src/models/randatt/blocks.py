@@ -8,8 +8,8 @@ from torch.autograd import Variable
 from .attention import SelfAttention, CrossAttention, RandomBlockSelfAttention, RandomBlockCrossAttention
 from .tools import causal_mask, alibi_shift
 
-from torch.nn import functional as F
-from src.models.base.py import LayerNorm
+
+from ..base import LayerNorm
 
 
 class MLP(nn.Module):
