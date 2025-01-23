@@ -260,7 +260,7 @@ class GPTBase(nn.Module):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
-                elif pn.endswith("weight") and isinstance(LayerNorm):
+                elif pn.endswith("weight") and isinstance(m, LayerNorm):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
