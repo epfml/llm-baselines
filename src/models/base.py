@@ -241,6 +241,9 @@ class GPTBase(nn.Module):
         # need to do import here to avoid circular import (since llama imports from base here)
         from .utils import BLACKLIST_WEIGHT_MODULES
 
+        blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm)  # Include
+
+
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
                 fpn = "%s.%s" % (mn, pn) if mn else pn  # full param name
