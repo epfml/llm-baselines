@@ -64,8 +64,10 @@ class EncoderBlock(nn.Module):
         self.attention = SelfAttention(model_dim, n_heads, act, bias= bias)
         self.mlp = MLP(model_dim, model_dim, 1 * (4*model_dim, ), bias = bias)
 
-        self.norm1 = LayerNorm(model_dim, bias = bias)
-        self.norm2 = LayerNorm(model_dim, bias = bias)
+        # self.norm1 = LayerNorm(model_dim, bias = bias)
+        # self.norm2 = LayerNorm(model_dim, bias = bias)
+        self.norm1 = nn.LayerNorm(model_dim)
+        self.norm2 = nn.LayerNorm(model_dim)
 
         self.drop_att = nn.Dropout(dropout_rate)
         self.drop_mlp = nn.Dropout(dropout_rate)
