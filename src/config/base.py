@@ -61,6 +61,9 @@ def parse_args(base_parser, args, namespace):
 
     parser.add_argument('--attention_type', default='base', choices=['base','self', 'random_block'], help='Type of attention to use')
     parser.add_argument('--block_dim', type=int, default=100, help='Block size for random block attention')
+    parser.add_argument("--eps", type=float, default=0.1, help="Blending factor for attention and cumsum")
+    parser.add_argument("--gamma", type=float, default=0.9, help="Decay factor for cumsum")
+
 
 
     args = parser.parse_args(args, namespace)

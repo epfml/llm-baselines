@@ -172,3 +172,23 @@ def extract_diagonal_blocks(X, n_blocks, block_size1, block_size2=None):
     X_block_diag = X_block_diag.permute(-1, *range(X_block_diag.ndim - 1))
 
     return X_block_diag
+
+
+def weighted_cumsum(v, gamma):
+    """
+    Compute the exponentially decaying weighted cumulative sum.
+
+    Args:
+        v: Tensor of shape (batch_size, seq_length, embedding_dim)
+        gamma: Decay factor, scalar or tensor broadcastable to (batch_size, seq_length)
+
+    Returns:
+        Tensor of shape (batch_size, seq_length, embedding_dim)
+    """
+    seq_len = v.shape[1]
+    weights = torch.cumprod(torch.ones((seq_len,), device=v.device) * gamma, dim=0)
+    weights = weights.flip(0).unsqueeze(0).unsqueeze(-1)  # Shape: (1, seq_length, 1)
+
+    cumsum_v = torch.cumsum(v.flip(1) * weights, dim=1).flip(1)
+    return cumsum_v
+
