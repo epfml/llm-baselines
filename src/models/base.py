@@ -117,20 +117,49 @@ class GPTBase(nn.Module):
         self.config = config
         self.tokenizer = tiktoken.get_encoding("gpt2")
         # Select block type based on config
+        # if config.attention_type == "random_block":
+        #     block_cls = LightEncoderBlock
+        # elif config.attention_type == "self":
+        #     block_cls = EncoderBlock
+        # elif config.attention_type == "base":
+        #     block_cls = Block  # Default fallback or custom Block type
+
         if config.attention_type == "random_block":
-            block_cls = LightEncoderBlock
+            block_cls = lambda **kwargs: LightEncoderBlock(
+                model_dim=config.n_embd,
+                block_dim=getattr(config, "block_dim", 100),
+                n_heads=config.n_head,
+                dropout_rate=config.dropout,
+                act=nn.GELU(),
+                bias=config.bias,
+                eps=getattr(config, "eps", 0.0),
+                gamma=getattr(config, "gamma", 0.9),
+                use_cumsum=getattr(config, "use_cumsum", False),
+            )
         elif config.attention_type == "self":
-            block_cls = EncoderBlock
+            block_cls = lambda **kwargs: EncoderBlock(
+                model_dim=config.n_embd,
+                n_heads=config.n_head,
+                dropout_rate=config.dropout,
+                act=nn.GELU(),
+                bias=config.bias,
+                eps=getattr(config, "eps", 0.0),
+                gamma=getattr(config, "gamma", 0.9),
+                use_cumsum=getattr(config, "use_cumsum", False),
+            )
         elif config.attention_type == "base":
-            block_cls = Block  # Default fallback or custom Block type
+            block_cls = lambda **kwargs: Block(config)
+
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.sequence_length, config.n_embd),
             drop = nn.Dropout(config.dropout),
+            # h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]) if config.attention_type == "base" 
+            # else 
+            # nn.ModuleList([block_cls(model_dim=config.n_embd, n_heads=config.n_head,dropout_rate=config.dropout,block_dim=getattr(config, "block_dim", None),bias=config.bias) for _ in range(config.n_layer) ]),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]) if config.attention_type == "base" 
-            else 
-            nn.ModuleList([block_cls(model_dim=config.n_embd, n_heads=config.n_head,dropout_rate=config.dropout,block_dim=getattr(config, "block_dim", None),bias=config.bias) for _ in range(config.n_layer) ]),
+            else nn.ModuleList([block_cls() for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
 

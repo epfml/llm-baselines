@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 #import src.models.randatt.attention
 from .attention import SelfAttention, CrossAttention, RandomBlockSelfAttention, RandomBlockCrossAttention
-from .tools import causal_mask, alibi_shift
+from .tools import causal_mask, alibi_shift, weighted_cumsum
 
 
 from ..tools import LayerNorm
@@ -42,7 +42,7 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False):
+    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False, eps=0.1, gamma=0.9, use_cumsum: bool=False):
 
         super().__init__()
 
@@ -61,6 +61,11 @@ class EncoderBlock(nn.Module):
 
         self.drop_att = nn.Dropout(dropout_rate)
         self.drop_mlp = nn.Dropout(dropout_rate)
+
+        self.eps = eps  # Blending factor
+        self.gamma = gamma  # Decay factor
+        self.use_cumsum = use_cumsum  # Toggle cumulative sum
+
 
 
     def attention_fn(self, x, mask=None, shift=None):
@@ -90,6 +95,9 @@ class EncoderBlock(nn.Module):
 
 
         x, keys, values = self.attention_fn(x, mask, shift)
+        if self.use_cumsum:
+            cumsum_output = weighted_cumsum(values, self.gamma)
+            x = (1 - self.eps) * x + self.eps * cumsum_output
         x = self.mlp_fn(x)
         
         return x#, keys, values 
@@ -124,9 +132,9 @@ class DecoderBlock(EncoderBlock):
 
 class LightEncoderBlock(EncoderBlock):
 
-    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False):
+    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False, eps=0.1, gamma=0.9, use_cumsum: bool=False):
         print(f"Initializing LightEncoderBlock with block_dim={block_dim}")
-        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias )
+        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias, eps=eps, gamma=gamma, use_cumsum= use_cumsum )
         self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias= bias)
 
 
