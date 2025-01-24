@@ -97,7 +97,10 @@ class EncoderBlock(nn.Module):
         x, keys, values = self.attention_fn(x, mask, shift)
         if self.use_cumsum:
             cumsum_output = weighted_cumsum(values, self.gamma)
+            print("using the flag")
             x = (1 - self.eps) * x + self.eps * cumsum_output
+        else: 
+            print("not using the flag")
         x = self.mlp_fn(x)
         
         return x#, keys, values 
