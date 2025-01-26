@@ -64,6 +64,8 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--eps", type=float, default=0.1, help="Blending factor for attention and cumsum")
     parser.add_argument("--gamma", type=float, default=0.9, help="Decay factor for cumsum")
     parser.add_argument("--use_cumsum", action="store_true", help="Should we use cumsum")
+    parser.add_argument("--trainable_cumsum",action="store_true",help="Enable training of eps and gamma for cumulative sum",)
+
 
 
 

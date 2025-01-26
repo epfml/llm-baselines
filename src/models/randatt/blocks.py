@@ -42,7 +42,7 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False, eps=0.1, gamma=0.9, use_cumsum: bool=False):
+    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False, eps=0.1, gamma=0.9, use_cumsum: bool=False, trainable_cumsum=False):
 
         super().__init__()
 
@@ -65,6 +65,16 @@ class EncoderBlock(nn.Module):
         self.eps = eps  # Blending factor
         self.gamma = gamma  # Decay factor
         self.use_cumsum = use_cumsum  # Toggle cumulative sum
+        
+        self.trainable_cumsum = trainable_cumsum
+
+        if self.trainable_cumsum:
+            self.weights_eps = nn.Parameter(torch.tensor(math.log(eps / (1 - eps)), dtype=torch.float32))
+            self.weights_gamma = nn.Parameter(torch.tensor(math.log(gamma / (1 - gamma)), dtype=torch.float32))
+        else:
+            self.eps = eps
+            self.gamma = gamma
+
 
 
 
@@ -93,11 +103,18 @@ class EncoderBlock(nn.Module):
         if shift is not None:
             shift = shift.to(device)
 
+        if self.trainable_cumsum:
+            eps = torch.sigmoid(self.weights_eps)
+            gamma = torch.sigmoid(self.weights_gamma)
+        else:
+            eps = self.eps
+            gamma = self.gamma
+
 
         x, keys, values = self.attention_fn(x, mask, shift)
         if self.use_cumsum:
-            cumsum_output = weighted_cumsum(values, self.gamma)
-            x = (1 - self.eps) * x + self.eps * cumsum_output
+            cumsum_output = weighted_cumsum(values, gamma)
+            x = (1 - eps) * x + eps * cumsum_output
         x = self.mlp_fn(x)
         
         return x#, keys, values 
@@ -132,9 +149,9 @@ class DecoderBlock(EncoderBlock):
 
 class LightEncoderBlock(EncoderBlock):
 
-    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False, eps=0.1, gamma=0.9, use_cumsum: bool=False):
+    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False, eps=0.1, gamma=0.9, use_cumsum: bool=False,trainable_cumsum=False):
         print(f"Initializing LightEncoderBlock with block_dim={block_dim}")
-        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias, eps=eps, gamma=gamma, use_cumsum= use_cumsum )
+        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias, eps=eps, gamma=gamma, use_cumsum= use_cumsum, trainable_cumsum=trainable_cumsum )
         self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias= bias)
 
 

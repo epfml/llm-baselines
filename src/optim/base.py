@@ -122,6 +122,19 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     ctx=type_ctx,
                 )
 
+                # Retrieve eps and gamma from the model
+                raw_model = distributed_backend.get_raw_model(model)
+                if extra_args.trainable_cumsum:
+                    eps = torch.sigmoid(raw_model.weights_eps).item()
+                    gamma = torch.sigmoid(raw_model.weights_gamma).item()
+                else:
+                    eps = raw_model.eps
+                    gamma = raw_model.gamma
+
+
+
+
+
                 print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                 print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
                 if scheduler is not None:
@@ -136,6 +149,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
                         "lr": current_lr,
+                        "eps": eps,  # Log eps
+                        "gamma": gamma,  # Log gamma
                     }
 
                     if itr == iterations:
