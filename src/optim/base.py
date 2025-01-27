@@ -122,24 +122,6 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     ctx=type_ctx,
                 )
 
-                # Retrieve eps and gamma from the model
-                # Retrieve eps and gamma from the model blocks
-                raw_model = distributed_backend.get_raw_model(model)
-
-                if extra_args.trainable_cumsum:
-                    eps_values = []
-                    gamma_values = []
-                    for block in raw_model.transformer.h:
-                        if hasattr(block, "weights_eps") and hasattr(block, "weights_gamma"):
-                            eps_values.append(torch.sigmoid(block.weights_eps).item())
-                            gamma_values.append(torch.sigmoid(block.weights_gamma).item())
-                    # Average eps and gamma across all blocks (optional)
-                    eps = sum(eps_values) / len(eps_values) if eps_values else None
-                    gamma = sum(gamma_values) / len(gamma_values) if gamma_values else None
-                else:
-                    eps = raw_model.transformer.h[0].eps  # Use the first block's eps as an example
-                    gamma = raw_model.transformer.h[0].gamma  # Use the first block's gamma as an example
-
 
 
 
@@ -160,10 +142,6 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         "val/acc": val_acc,
                         "lr": current_lr,
                     }
-                    # Log eps and gamma only if trainable_cumsum is enabled
-                    if extra_args.trainable_cumsum:
-                        logs["eps"] = eps
-                        logs["gamma"] = gamma
                     if itr == iterations:
                         logs["val/final-ppl"] = val_perplexity
                         logs["val/final-acc"] = val_acc
