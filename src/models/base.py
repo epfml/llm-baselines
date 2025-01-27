@@ -282,10 +282,10 @@ class GPTBase(nn.Module):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
         
-
-        for name, param in self.named_parameters():
-            if "weights_eps" in name or "weights_gamma" in name:
-                no_decay.add(name)
+        if self.config.trainable_cumsum:
+            for name, param in self.named_parameters():
+                if "weights_eps" in name or "weights_gamma" in name:
+                    no_decay.add(name)
 
 
         for mn, m in self.named_modules():
