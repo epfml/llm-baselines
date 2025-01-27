@@ -149,10 +149,11 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         "val/perplexity": val_perplexity,
                         "val/acc": val_acc,
                         "lr": current_lr,
-                        "eps": eps,  # Log eps
-                        "gamma": gamma,  # Log gamma
                     }
-
+                    # Log eps and gamma only if trainable_cumsum is enabled
+                    if extra_args.trainable_cumsum:
+                        logs["eps"] = eps
+                        logs["gamma"] = gamma
                     if itr == iterations:
                         logs["val/final-ppl"] = val_perplexity
                         logs["val/final-acc"] = val_acc
