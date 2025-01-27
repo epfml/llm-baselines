@@ -113,7 +113,7 @@ class EncoderBlock(nn.Module):
 
         x, keys, values = self.attention_fn(x, mask, shift)
         if self.use_cumsum:
-            cumsum_output = weighted_cumsum(values, gamma)
+            cumsum_output = weighted_cumsum(x, gamma)
             x = (1 - eps) * x + eps * cumsum_output
         x = self.mlp_fn(x)
         
