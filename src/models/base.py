@@ -135,6 +135,7 @@ class GPTBase(nn.Module):
                 eps=getattr(config, "eps", 0.0),
                 gamma=getattr(config, "gamma", 0.9),
                 use_cumsum=getattr(config, "use_cumsum", False),
+                trainable_cumsum=config.trainable_cumsum,
             )
         elif config.attention_type == "self":
             block_cls = lambda **kwargs: EncoderBlock(
@@ -146,6 +147,7 @@ class GPTBase(nn.Module):
                 eps=getattr(config, "eps", 0.0),
                 gamma=getattr(config, "gamma", 0.9),
                 use_cumsum=getattr(config, "use_cumsum", False),
+                trainable_cumsum=config.trainable_cumsum,
             )
         elif config.attention_type == "base":
             block_cls = lambda **kwargs: Block(config)
@@ -279,6 +281,11 @@ class GPTBase(nn.Module):
                 elif pn.endswith("weight") and isinstance(m, BLACKLIST_WEIGHT_MODULES):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
+        
+
+        for name, param in self.named_parameters():
+            if "weights_eps" in name or "weights_gamma" in name:
+                no_decay.add(name)
 
 
         for mn, m in self.named_modules():
