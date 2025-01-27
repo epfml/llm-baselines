@@ -123,13 +123,23 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 )
 
                 # Retrieve eps and gamma from the model
+                # Retrieve eps and gamma from the model blocks
                 raw_model = distributed_backend.get_raw_model(model)
+
                 if extra_args.trainable_cumsum:
-                    eps = torch.sigmoid(raw_model.weights_eps).item()
-                    gamma = torch.sigmoid(raw_model.weights_gamma).item()
+                    eps_values = []
+                    gamma_values = []
+                    for block in raw_model.transformer.h:
+                        if hasattr(block, "weights_eps") and hasattr(block, "weights_gamma"):
+                            eps_values.append(torch.sigmoid(block.weights_eps).item())
+                            gamma_values.append(torch.sigmoid(block.weights_gamma).item())
+                    # Average eps and gamma across all blocks (optional)
+                    eps = sum(eps_values) / len(eps_values) if eps_values else None
+                    gamma = sum(gamma_values) / len(gamma_values) if gamma_values else None
                 else:
-                    eps = raw_model.eps
-                    gamma = raw_model.gamma
+                    eps = raw_model.transformer.h[0].eps  # Use the first block's eps as an example
+                    gamma = raw_model.transformer.h[0].gamma  # Use the first block's gamma as an example
+
 
 
 
