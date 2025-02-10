@@ -92,30 +92,38 @@ class CausalSelfAttention(nn.Module):
         else:
             q_reduced, k_reduced, v_reduced = None, None, None
         
-        # Concatenate full and reduced heads
+        # Compute attention separately for full and reduced heads
+        y_full, y_reduced = None, None
+        
+        if self.n_full_heads > 0:
+            y_full = F.scaled_dot_product_attention(q_full, k_full, v_full, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        
+        if self.use_reduced_heads and self.n_reduced_heads > 0:
+            y_reduced = F.scaled_dot_product_attention(q_reduced, k_reduced, v_reduced, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        # Concatenate attention outputs after computing attention
         if self.use_reduced_heads:
             if self.n_full_heads > 0 and self.n_reduced_heads > 0:
-                q = torch.cat([q_full, q_reduced], dim=1)
-                k = torch.cat([k_full, k_reduced], dim=1)
-                v = torch.cat([v_full, v_reduced], dim=1)
+                y = torch.cat([y_full, y_reduced], dim=1)
             elif self.n_full_heads > 0:
-                q, k, v = q_full, k_full, v_full
+                y = y_full
             else:
-                q, k, v = q_reduced, k_reduced, v_reduced
+                y = y_reduced
         else:
-            q, k, v = q_full, k_full, v_full
+            y = y_full
+
+
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # if self.flash:
+        #     # efficient attention using Flash Attention CUDA kernels
+        #     y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        # else:
+        #     # manual implementation of attention
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
