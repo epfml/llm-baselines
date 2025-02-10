@@ -51,7 +51,7 @@ class CausalSelfAttention(nn.Module):
         
         # Standard full-dimension projections
         if self.n_full_heads > 0:
-            self.qk_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
+            self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
             #self.v_full = nn.Linear(self.n_embd, self.n_full_heads * self.head_dim, bias=config.bias)
         
         # Reduced-dimension projections if enabled
