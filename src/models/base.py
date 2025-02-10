@@ -29,7 +29,7 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        #self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
@@ -50,10 +50,11 @@ class CausalSelfAttention(nn.Module):
         self.reduced_dim = int(self.head_dim * self.reduction_factor)
         
         # Standard full-dimension projections
-        self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
+        if self.n_full_heads > 0:
+            self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
         
         # Reduced-dimension projections if enabled
-        if self.use_reduced_heads:
+        if self.use_reduced_heads and self.n_reduced_heads > 0:
             self.qkv_reduced = nn.Linear(self.n_embd, 3 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
 
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
@@ -67,11 +68,42 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k ,v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # q, k ,v  = self.c_attn(x).split(self.n_embd, dim=2)
+        # k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        # Compute full-size projections if applicable
+        if self.n_full_heads > 0:
+            q_full, k_full, v_full = self.qkv_full(x).split(self.n_full_heads * self.head_dim, dim=2)
+            q_full = q_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
+            k_full = k_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
+            v_full = v_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
+        else:
+            q_full, k_full, v_full = None, None, None
+        
+        # Compute reduced-size projections if applicable
+        if self.use_reduced_heads and self.n_reduced_heads > 0:
+            q_reduced, k_reduced, v_reduced = self.qkv_reduced(x).split(self.n_reduced_heads * self.reduced_dim, dim=2)
+            q_reduced = q_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
+            k_reduced = k_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
+            v_reduced = v_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
+        else:
+            q_reduced, k_reduced, v_reduced = None, None, None
+        
+        # Concatenate full and reduced heads
+        if self.use_reduced_heads:
+            if self.n_full_heads > 0 and self.n_reduced_heads > 0:
+                q = torch.cat([q_full, q_reduced], dim=1)
+                k = torch.cat([k_full, k_reduced], dim=1)
+                v = torch.cat([v_full, v_reduced], dim=1)
+            elif self.n_full_heads > 0:
+                q, k, v = q_full, k_full, v_full
+            else:
+                q, k, v = q_reduced, k_reduced, v_reduced
+        else:
+            q, k, v = q_full, k_full, v_full
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
