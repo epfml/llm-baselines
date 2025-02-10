@@ -51,11 +51,13 @@ class CausalSelfAttention(nn.Module):
         
         # Standard full-dimension projections
         if self.n_full_heads > 0:
-            self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
+            self.qk_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
+            #self.v_full = nn.Linear(self.n_embd, self.n_full_heads * self.head_dim, bias=config.bias)
         
         # Reduced-dimension projections if enabled
         if self.use_reduced_heads and self.n_reduced_heads > 0:
-            self.qkv_reduced = nn.Linear(self.n_embd, 3 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
+            self.qk_reduced = nn.Linear(self.n_embd, 2 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
+            self.v_reduced = nn.Linear(self.n_embd, self.n_reduced_heads * self.head_dim, bias=config.bias)
 
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -84,11 +86,11 @@ class CausalSelfAttention(nn.Module):
             q_full, k_full, v_full = None, None, None
         
         # Compute reduced-size projections if applicable
+        # Compute reduced-size projections if applicable
         if self.use_reduced_heads and self.n_reduced_heads > 0:
-            q_reduced, k_reduced, v_reduced = self.qkv_reduced(x).split(self.n_reduced_heads * self.reduced_dim, dim=2)
-            q_reduced = q_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
-            k_reduced = k_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
-            v_reduced = v_reduced.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
+            qk_reduced = self.qk_reduced(x).split(self.n_reduced_heads * self.reduced_dim, dim=2)
+            q_reduced, k_reduced = [t.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2) for t in qk_reduced]
+            v_reduced = self.v_reduced(x).view(B, T, self.n_reduced_heads, self.head_dim).transpose(1, 2)
         else:
             q_reduced, k_reduced, v_reduced = None, None, None
         
