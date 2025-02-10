@@ -8,12 +8,14 @@ import torch
 import wandb
 import yaml
 
+from logger.logger import DynamicsLogger
+
 from .schedule import (update_weight_decay, wd_cosine_schedule,
                        wd_linear_schedule, wd_stable_decay_schedule,
                        wd_wsd_schedule)
-# from logger.logger import DynamicsLogger
-from .utils import (eval, get_batch, load_checkpoint, load_worker_state,
-                    save_checkpoint, save_worker_state)
+from .utils import (eval, get_batch, get_parameter_norms, load_checkpoint,
+                    load_worker_state, log_prodigy_lr, save_checkpoint,
+                    save_worker_state)
 
 
 def train(
@@ -59,15 +61,15 @@ def train(
     else:
         curr_iter = 0
 
-    # if distributed_backend.is_master_process() and cfg.log_dynamics:
-    #     with open(cfg.dynamics_logger_cfg, "r") as f:
-    #         dlcfg = yaml.safe_load(f)
+    if distributed_backend.is_master_process() and cfg.log_dynamics:
+        with open(cfg.dynamics_logger_cfg, "r") as f:
+            dlcfg = yaml.safe_load(f)
 
-    #     # Hooks into optimizer
-    #     dlogger = DynamicsLogger(
-    #         model, opt, dlcfg, cfg.results_base_folder, wandb=cfg.wandb
-    #     )
-    #     dlogger.iteration = curr_iter
+        # Hooks into optimizer
+        dlogger = DynamicsLogger(
+            model, opt, dlcfg, cfg.results_base_folder, wandb=cfg.wandb
+        )
+        dlogger.iteration = curr_iter
 
     substep = curr_iter * cfg.acc_steps
     train_reader, val_reader = datareaders["train"], datareaders["val"]
@@ -214,7 +216,7 @@ def train(
             opt.update_last_grad()
         else:
             opt.zero_grad(set_to_none=True)
-        # opt.zero_grad(set_to_none=True)
+
         dt = (time.perf_counter_ns() - t_start) / 1e9
 
         curr_iter += 1
@@ -228,11 +230,20 @@ def train(
 
             current_lrs = [param_group["lr"] for param_group in opt.param_groups]
 
+            if cfg.opt == "prodigy":
+                prodigy_lrs = log_prodigy_lr(opt)
+                prodigy_base_lrs, prodigy_efective_lrs = (
+                    prodigy_lrs["base_lrs"],
+                    prodigy_lrs["effective_lrs"],
+                )
+
             print(
                 f"Train: Iter={curr_iter} ({epoch:0.3f} epochs) "
                 f"train_loss={train_loss:.3f} iter_dt={dt:.2e}s "
                 f"lr={current_lrs[0]:.2e}"
             )
+            if cfg.opt == "prodigy":
+                print(f"effective_lr={prodigy_efective_lrs[0]:.2e}")
 
             if cfg.wandb:
                 wandb_logs = {
@@ -251,15 +262,15 @@ def train(
                 if cfg.weight_decay_scheduler:
                     wandb_logs["wd"] = opt.param_groups[0]["weight_decay"]
 
+                if cfg.opt == "prodigy":
+                    wandb_logs["base_lr"] = prodigy_base_lrs[0]
+                    wandb_logs["effective_lr"] = prodigy_efective_lrs[0]
+
                 # log the L2 norm of the parameters
                 # works in a single gpu setting
                 if cfg.log_parameter_norms:
                     raw_model = distributed_backend.get_raw_model(model)
-                    model_norm = 0
-                    for p in raw_model.parameters():
-                        param_norm = p.detach().data.norm(p=2)
-                        model_norm += param_norm.item() ** 2
-                    model_norm = model_norm**0.5
+                    model_norm = get_parameter_norms(raw_model, order=cfg.norm_order)
                     wandb_logs["model_norm"] = model_norm
 
                 wandb.log(wandb_logs)

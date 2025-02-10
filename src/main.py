@@ -378,13 +378,7 @@ def main(args, parser):
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2),
-            precondition_frequency=args.precondition_frequency,
             weight_decay=args.weight_decay,
-            use_decoupled_weight_decay=True,
-            # grafting_config=AdamGraftingConfig(
-            #     beta2=args.beta2,  # oroginally, the default value is 0.999
-            #     epsilon=1e-8,
-            # ),
         )
     elif args.opt == "adopt":
         if args.cautious:
@@ -392,7 +386,7 @@ def main(args, parser):
                 group_specs,
                 lr=args.lr,
                 betas=(args.beta1, args.beta2),
-                eps=1e-6,
+                eps=args.adopt_eps,
                 weight_decay=args.weight_decay,
                 decouple=args.adopt_decouple,
             )
@@ -401,7 +395,7 @@ def main(args, parser):
                 group_specs,
                 lr=args.lr,
                 betas=(args.beta1, args.beta2),
-                eps=1e-6,
+                eps=args.adopt_eps,  # 1e-6
                 weight_decay=args.weight_decay,
                 decouple=args.adopt_decouple,
             )

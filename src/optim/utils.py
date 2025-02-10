@@ -182,3 +182,40 @@ def load_worker_state(ckpt_dir: Path):
     torch.cuda.set_rng_state(worker_state["rng_torch_gpu"])
     np.random.set_state(worker_state["rng_np"])
     random.setstate(worker_state["rng_python"])
+
+
+def get_parameter_norms(model, order=2):
+    model_norm = 0
+    for p in model.parameters():
+        param_data = p.detach().data
+        if order == float("inf"):
+            param_norm = param_data.norm(p=order)
+            model_norm = max(model_norm, param_norm.item())
+        else:
+            param_norm = param_data.norm(p=order)
+            model_norm += param_norm.item() ** order
+
+    if order != float("inf"):
+        model_norm = model_norm ** (1.0 / order)
+
+    return model_norm
+
+
+def log_prodigy_lr(opt):
+    lr_info = {"base_lrs": [], "effective_lrs": []}
+
+    for group in opt.param_groups:
+        d = group["d"]
+        lr = group["lr"]
+        if group["use_bias_correction"]:
+            k = group["k"]
+            beta1, beta2 = group["betas"]
+            bias_correction = ((1 - beta2 ** (k + 1)) ** 0.5) / (1 - beta1 ** (k + 1))
+        else:
+            bias_correction = 1
+        effective_lr = d * lr * bias_correction
+
+        lr_info["base_lrs"].append(lr)
+        lr_info["effective_lrs"].append(effective_lr)
+
+    return lr_info

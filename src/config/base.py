@@ -47,11 +47,12 @@ def parse_args(base_parser, args, namespace):
         "--eval_seq_prefix", default="none", type=str
     )  # prefix used to generate sequences
     parser.add_argument("--log_dynamics", action="store_true")
-    # parser.add_argument(
-    #     "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
-    # )
+    parser.add_argument(
+        "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
+    )
     parser.add_argument("--wandb_entity", default=None, type=none_or_str)
     parser.add_argument("--log_parameter_norms", action="store_true")
+    parser.add_argument("--norm_order", default=2)
 
     # Schedule
     parser.add_argument(
@@ -176,6 +177,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--normalized", default=False, action="store_true")
     parser.add_argument("--sgd_lr_scale", default=1.0, type=float)
     parser.add_argument("--adopt_decouple", default=True, type=bool)
+    parser.add_argument("--adopt_eps", default=1e-6, type=float)
     parser.add_argument("--cautious", default=False, type=bool)
     parser.add_argument(
         "--weight_decay_scheduler",

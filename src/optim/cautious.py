@@ -134,7 +134,9 @@ class CautiousAdamW(torch.optim.Optimizer):
 
                 # compute norm gradient
                 mask = (exp_avg * grad > 0).to(grad.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(
+                    mask.mean().clamp_(min=1e-3)
+                )  # https://huggingface.co/rwightman/timm-optim-caution found this implementation is more favoarable in many cases
                 norm_grad = (exp_avg * mask) / denom
                 p.add_(norm_grad, alpha=-step_size)
         return loss
@@ -148,7 +150,7 @@ def lion_update_fn(p, grad, exp_avg, lr, wd, beta1, beta2):
     p.data.mul_(1 - lr * wd)
     update = exp_avg.clone().mul_(beta1).add(grad, alpha=1 - beta1).sign_()
     mask = (update * grad > 0).to(grad.dtype)
-    mask = mask * (mask.numel() / (mask.sum() + 1))
+    mask.div_(mask.mean().clamp_(min=1e-3))
     p.add_(update * mask, alpha=-lr)
     exp_avg.mul_(beta2).add_(grad, alpha=1 - beta2)
 
@@ -447,7 +449,7 @@ class CautiousAdafactor(torch.optim.Optimizer):
                         update, alpha=(1 - group["beta1"])
                     )
                     mask = (exp_avg * grad > 0).to(grad.dtype)
-                    mask = mask * (mask.numel() / (mask.sum() + 1))
+                    mask.div_(mask.mean().clamp_(min=1e-3))
                     update = exp_avg * mask
 
                 if group["weight_decay"] != 0:
@@ -637,7 +639,7 @@ class CautiousAdEMAMix(torch.optim.Optimizer):
 
                 # caution
                 mask = (update * grad > 0).to(grad.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
 
                 p.add_(-lr * update * mask)
 
@@ -741,7 +743,7 @@ class CautiousADOPT(torch.optim.Optimizer):
                 # caution
                 update = exp_avg.clone()
                 mask = (update * grad > 0).to(grad.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
                 param.data.add_(update * mask, alpha=-group["lr"])
 
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
@@ -857,7 +859,7 @@ class CautiousSignum(torch.optim.Optimizer):
 
                 # caution
                 mask = (update * grad > 0).to(grad.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
                 p.add_(update * mask)
 
         return loss
@@ -1105,7 +1107,7 @@ def _single_tensor_sophiag(
             # caution
             update = exp_avg.sign() * ratio * step_size_neg
             mask = (update * grad > 0).to(grad.dtype)
-            mask = mask * (mask.numel() / (mask.sum() + 1))
+            mask.div_(mask.mean().clamp_(min=1e-3))
             param.add_(update * mask)
 
 
@@ -1312,7 +1314,7 @@ class CautiousSOAP(torch.optim.Optimizer):
 
                 # caution
                 mask = (norm_grad * grad > 0).to(grad.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
                 p.add_(norm_grad * mask, alpha=-step_size)
 
                 # From AdamW code: Just adding the square of the weights to the loss function is *not*
@@ -1706,7 +1708,7 @@ class CautiousMuon(torch.optim.Optimizer):
                 )
                 # caution
                 mask = (update * p.grad > 0).to(update.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
                 cautious_update = update * mask
                 p.data.add_(cautious_update, alpha=-lr)
                 curr_idx += p.numel()
@@ -1749,5 +1751,5 @@ class CautiousMuon(torch.optim.Optimizer):
                 update = update / scale
                 p.data.mul_(1 - lr * weight_decay)
                 mask = (update * g > 0).to(g.dtype)
-                mask = mask * (mask.numel() / (mask.sum() + 1))
+                mask.div_(mask.mean().clamp_(min=1e-3))
                 p.data.add_(update * mask, alpha=-lr)
