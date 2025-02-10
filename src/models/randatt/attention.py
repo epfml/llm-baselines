@@ -35,11 +35,11 @@ def attention(q, k, v, mask=None, shift=None):
     # Obtain attention weights from the logits
     #
     att = F.softmax(log_att, dim=-1)
-
+    
     #
     # Compute the attention output by mixing v with attention weights
     #
-    return att @ v  
+    return att @ v
 
 
 

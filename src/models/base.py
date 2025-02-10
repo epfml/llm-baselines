@@ -38,6 +38,24 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+
+        self.use_reduced_heads = getattr(config, "use_reduced_heads", False)
+        self.ratio_heads = getattr(config, "ratio_heads", 0)
+        self.reduction_factor = getattr(config, "reduction_factor", 0.5)
+
+        # Compute the number of full-sized and reduced-dimension heads
+        self.n_reduced_heads = int(self.n_head * self.ratio_heads)
+        self.n_full_heads = self.n_head - self.n_reduced_heads
+        self.head_dim = self.n_embd // self.n_head
+        self.reduced_dim = int(self.head_dim * self.reduction_factor)
+        
+        # Standard full-dimension projections
+        self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
+        
+        # Reduced-dimension projections if enabled
+        if self.use_reduced_heads:
+            self.qkv_reduced = nn.Linear(self.n_embd, 3 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
+
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
