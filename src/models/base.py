@@ -56,6 +56,7 @@ class CausalSelfAttention(nn.Module):
         
         # Reduced-dimension projections if enabled
         if self.use_reduced_heads and self.n_reduced_heads > 0:
+            print(f"Normal head dim: {self.head_dim}, Using reduced head dim: {self.reduced_dim} for {self.num_reduced_heads}/{self.n_head} heads")
             self.qk_reduced = nn.Linear(self.n_embd, 2 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
             self.v_reduced = nn.Linear(self.n_embd, self.n_reduced_heads * self.head_dim, bias=config.bias)
 
