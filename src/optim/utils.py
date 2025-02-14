@@ -202,7 +202,7 @@ def get_parameter_norms(model, order=2):
 
 
 def log_prodigy_lr(opt):
-    lr_info = {"base_lrs": [], "effective_lrs": []}
+    effective_lrs = []
 
     for group in opt.param_groups:
         d = group["d"]
@@ -214,8 +214,6 @@ def log_prodigy_lr(opt):
         else:
             bias_correction = 1
         effective_lr = d * lr * bias_correction
+        effective_lrs.append(effective_lr)
 
-        lr_info["base_lrs"].append(lr)
-        lr_info["effective_lrs"].append(effective_lr)
-
-    return lr_info
+    return effective_lrs

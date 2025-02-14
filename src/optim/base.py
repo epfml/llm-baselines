@@ -231,11 +231,7 @@ def train(
             current_lrs = [param_group["lr"] for param_group in opt.param_groups]
 
             if cfg.opt == "prodigy":
-                prodigy_lrs = log_prodigy_lr(opt)
-                prodigy_base_lrs, prodigy_efective_lrs = (
-                    prodigy_lrs["base_lrs"],
-                    prodigy_lrs["effective_lrs"],
-                )
+                prodigy_efective_lrs = log_prodigy_lr(opt)
 
             print(
                 f"Train: Iter={curr_iter} ({epoch:0.3f} epochs) "
@@ -263,7 +259,6 @@ def train(
                     wandb_logs["wd"] = opt.param_groups[0]["weight_decay"]
 
                 if cfg.opt == "prodigy":
-                    wandb_logs["base_lr"] = prodigy_base_lrs[0]
                     wandb_logs["effective_lr"] = prodigy_efective_lrs[0]
 
                 # log the L2 norm of the parameters
