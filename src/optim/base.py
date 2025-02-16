@@ -12,6 +12,32 @@ import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
+from ptflops import get_model_complexity_info
+
+
+def profile_model(model, sequence_length, vocab_size, device):
+    # Dummy input for profiling
+    dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
+
+    def forward_pass_with_logits_only(model, x):
+        return model(x, get_logits=True)['logits']
+
+    macs, params = get_model_complexity_info(
+        model,
+        (sequence_length,),
+        input_constructor=lambda _: dummy_input,
+        as_strings=False,
+        print_per_layer_stat=False,
+        verbose=False,
+        custom_modules_hooks={},
+        # Useful to disable certain operations that might break profiling
+        # custom_hooks would be needed if reduced heads or custom attention is causing issues
+        # You can define a custom hook for specific modules if necessary
+    )
+    # Convert MACs to FLOPs: 2 * MACs for typical neural network ops
+    flops = 2 * macs
+    return flops, params
+
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
@@ -56,6 +82,14 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     if extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
+
+    # Profile FLOPs once (or periodically if desired)
+    if distributed_backend.is_master_process():
+        flops, params = profile_model(model, sequence_length, extra_args.vocab_size, extra_args.device)
+        print(f"[Profiling] FLOPs: {flops:,} | Params: {params:,}")
+        if extra_args.wandb:
+            wandb.log({"model/flops": flops, "model/params": params})
+
 
     model.train()
 
