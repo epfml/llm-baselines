@@ -15,8 +15,6 @@ from data.utils import get_dataset
 from optim.base import train_base
 import distributed
 
-from ptflops import get_model_complexity_info
-
 
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -57,27 +55,6 @@ def main(args):
     print(f"Num validation tokens: {len(data['val'])}")
     
     model = get_model(args).to(args.device) # todo: take care of initializing the model if args.use_pretrained != 'none'
-
-    # ADD FLOPs COUNTING
-    if distributed_backend.is_master_process():
-        def input_constructor(input_res):
-            # Ignore input_res, use your own input creation
-            return (torch.randint(0, args.vocab_size, (1, args.sequence_length), dtype=torch.long).to(args.device),)
-
-        macs, params = get_model_complexity_info(
-            model,
-            (args.sequence_length,),
-            as_strings=False,
-            print_per_layer_stat=False,
-            verbose=False,
-            input_constructor=input_constructor,
-        )
-
-        flops = 2 * macs  # FLOPs = 2 * MACs for most operations
-        print(f"[FLOPs] Forward pass FLOPs: {flops / 1e9:.2f} GFLOPs")
-
-        if args.wandb:
-            wandb.log({"flops_gflops": flops / 1e9})
 
     model = distributed_backend.transform_model(model)
     
