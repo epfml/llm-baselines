@@ -18,9 +18,14 @@ from models.base import CausalSelfAttention, attention_flop_counter
 
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
-    dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
+    dummy_input = torch.randint(0, vocab_size, (1, sequence_length), device=device)
 
-    flop_analyzer = FlopCountAnalysis(model, (dummy_input,))
+    # FlopCountAnalysis expects actual execution
+    def forward_fn(input_ids):
+        outputs = model(input_ids, get_logits=True)  # Full forward pass over sequence length
+        return outputs['logits']
+
+    flop_analyzer = FlopCountAnalysis(forward_fn, (dummy_input,))
     flop_analyzer.set_op_handle(CausalSelfAttention, attention_flop_counter)
 
     total_flops = flop_analyzer.total()
@@ -28,6 +33,7 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     print(flop_count_table(flop_analyzer))
 
     return total_flops
+
 
 
 
