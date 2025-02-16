@@ -25,17 +25,16 @@ from fvcore.nn import FlopCountAnalysis
 
 
 
+
+
+
 def attention_flop_counter(module, inputs, outputs):
-    """
-    Custom FLOP counter for CausalSelfAttention with reduced heads support.
-    """
     B, T, C = inputs[0].shape  # batch size, sequence length, embedding size
     n_full_heads = module.n_full_heads
     n_reduced_heads = module.n_reduced_heads
     head_dim = module.head_dim
     reduced_dim = module.reduced_dim
 
-    # QKV projection FLOPs
     flops_qkv_full = 0
     flops_qkv_reduced = 0
     if n_full_heads > 0:
@@ -43,7 +42,6 @@ def attention_flop_counter(module, inputs, outputs):
     if n_reduced_heads > 0:
         flops_qkv_reduced = B * T * C * (2 * n_reduced_heads * reduced_dim + n_reduced_heads * head_dim)
 
-    # Attention computation FLOPs (Q @ K^T + Softmax + AV)
     flops_attn_full = 0
     flops_attn_reduced = 0
     if n_full_heads > 0:
@@ -51,7 +49,6 @@ def attention_flop_counter(module, inputs, outputs):
     if n_reduced_heads > 0:
         flops_attn_reduced = B * n_reduced_heads * T * (T * reduced_dim + T + T * head_dim) * 2
 
-    # Output projection FLOPs (merging heads back into embedding)
     flops_output_proj = B * T * C * C
 
     total_flops = (
@@ -63,10 +60,6 @@ def attention_flop_counter(module, inputs, outputs):
     )
 
     return total_flops
-
-
-FlopCountAnalysis.register_op(CausalSelfAttention, attention_flop_counter)
-
 
 
 

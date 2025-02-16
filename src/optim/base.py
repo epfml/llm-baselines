@@ -16,16 +16,18 @@ from .utils import eval, get_batch, save_checkpoint
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
-    # Dummy input for profiling
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
 
-    flop_analyzer = FlopCountAnalysis(model, (dummy_input,))
-    total_flops = flop_analyzer.total()
+    flop_analyzer = FlopCountAnalysis(
+        model, (dummy_input,), custom_ops={CausalSelfAttention: attention_flop_counter}
+    )
 
+    total_flops = flop_analyzer.total()
     print("[FvCore Profiling] Total FLOPs (per forward pass): {:,}".format(total_flops))
-    print(flop_count_table(flop_analyzer))  # Optional: Per-layer breakdown
+    print(flop_count_table(flop_analyzer))  # Optional detailed breakdown
 
     return total_flops
+
 
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
