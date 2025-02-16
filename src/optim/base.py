@@ -13,22 +13,22 @@ import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
 
-from fvcore.nn import FlopCountAnalysis, flop_count_table
+from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count_table
 from models.base import CausalSelfAttention, attention_flop_counter
 
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
 
-    flop_analyzer = FlopCountAnalysis(
-        model, (dummy_input,), custom_ops={CausalSelfAttention: attention_flop_counter}
-    )
+    flop_analyzer = FlopCountAnalysis(model, (dummy_input,))
+    flop_analyzer.set_op_handle(CausalSelfAttention, attention_flop_counter)
 
     total_flops = flop_analyzer.total()
     print("[FvCore Profiling] Total FLOPs (per forward pass): {:,}".format(total_flops))
-    print(flop_count_table(flop_analyzer))  # Optional detailed breakdown
+    print(flop_count_table(flop_analyzer))
 
     return total_flops
+
 
 
 
