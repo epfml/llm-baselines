@@ -14,6 +14,8 @@ from .utils import eval, get_batch, save_checkpoint
 
 
 from fvcore.nn import FlopCountAnalysis, flop_count_table
+from models.base import CausalSelfAttention, attention_flop_counter
+
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
