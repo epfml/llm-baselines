@@ -60,7 +60,8 @@ def main(args):
 
     # ADD FLOPs COUNTING
     if distributed_backend.is_master_process():
-        def input_constructor():
+        def input_constructor(input_res):
+            # Ignore input_res, use your own input creation
             return (torch.randint(0, args.vocab_size, (1, args.sequence_length), dtype=torch.long).to(args.device),)
 
         macs, params = get_model_complexity_info(
