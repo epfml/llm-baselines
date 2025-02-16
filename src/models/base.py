@@ -20,6 +20,27 @@ from .randatt.tools import causal_mask, alibi_shift
 
 from .tools import LayerNorm
 
+from ptflops.flops_counter import get_model_complexity_info
+
+# Assuming your sequence_length, batch_size, and vocab_size are known:
+sequence_length = config.sequence_length
+batch_size = 1  # or any realistic batch size
+vocab_size = config.vocab_size
+
+# Create a fake input tensor
+dummy_input = torch.randint(0, vocab_size, (batch_size, sequence_length)).to(next(model.parameters()).device)
+
+# Evaluate FLOPs
+with torch.no_grad():
+    model.start_flops_count()
+    _ = model(dummy_input)  # Forward pass to trigger counting
+    flops = model.compute_average_flops_cost()
+    model.stop_flops_count()
+
+print(f"FLOPs for one forward pass (batch_size={batch_size}, seq_len={sequence_length}): {flops / 1e9:.2f} GFLOPs")
+
+
+
 
 
 
@@ -197,6 +218,7 @@ class GPTBase(nn.Module):
                 gamma=getattr(config, "gamma", 0.9),
                 use_cumsum=getattr(config, "use_cumsum", False),
                 trainable_cumsum=config.trainable_cumsum,
+                use_softmax_cumsum=config.use_softmax_cumsum,
             )
         elif config.attention_type == "self":
             block_cls = lambda **kwargs: EncoderBlock(
@@ -209,6 +231,7 @@ class GPTBase(nn.Module):
                 gamma=getattr(config, "gamma", 0.9),
                 use_cumsum=getattr(config, "use_cumsum", False),
                 trainable_cumsum=config.trainable_cumsum,
+                use_softmax_cumsum=config.use_softmax_cumsum,
             )
         elif config.attention_type == "base":
             block_cls = lambda **kwargs: Block(config)
@@ -242,6 +265,10 @@ class GPTBase(nn.Module):
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+
+        self = add_flops_counting_methods(self)
+        self.eval()  # Required for ptflops to work correctly for the first measurement
+
 
     def get_num_params(self, non_embedding=True):
         """

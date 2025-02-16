@@ -174,7 +174,8 @@ def extract_diagonal_blocks(X, n_blocks, block_size1, block_size2=None):
     return X_block_diag
 
 
-def weighted_cumsum(v, gamma):
+
+def geometric_cumsum(v, gamma):
     """
     Compute the exponentially decaying weighted cumulative sum.
 
@@ -186,9 +187,58 @@ def weighted_cumsum(v, gamma):
         Tensor of shape (batch_size, seq_length, embedding_dim)
     """
     seq_len = v.shape[1]
-    weights = torch.cumprod(torch.ones((seq_len,), device=v.device) * gamma, dim=0)
-    weights = weights.flip(0).unsqueeze(0).unsqueeze(-1)  # Shape: (1, seq_length, 1)
 
-    cumsum_v = torch.cumsum(v.flip(1) * weights, dim=1).flip(1)
-    return cumsum_v
+    #
+    # Create a geometric sequence (gamma, gamma^2, ..., gamma^seq_len)
+    #
+    weights = torch.cumprod(torch.ones((seq_len,), device=v.device) * gamma, dim=0) + 1e-9
+
+    #
+    # Reverse the sequence so that it is (gamma^seq_len, ..., gamma^2, gamma^1)
+    #
+    weights = weights.flip(0).unsqueeze(0).unsqueeze(-1)  # Shape: (1, seq_length, 1)
+    weights = weights.clamp(1e-9, 1)
+
+    #
+    # Compute the (unnormalized) weighted cumulative sum of v: (gamma^seq_len v1, gamma^seq_len v1 + gamma^{seq_len-1} v2, ..., gamma^seq_len v1 + ... + gamma vseq_len)
+    #
+    cumsum_v = torch.cumsum(v * weights, dim=1)
+
+    #
+    # Compute the normalizing constants (gamma^seq_len, gamma^seq_len + gamma^{seq_len-1}, ..., gamma^seq_len + ... + gamma)
+    #
+    normalizers = torch.cumsum(weights, dim=1)
+
+    return cumsum_v / normalizers
+
+def softmax_cumsum(v, L):
+    """
+    Compute the softmax-weighted causal cumulative sum.
+
+    Args:
+        v: Tensor of shape (batch_size, seq_length, embedding_dim)
+        L: Tensor of shape (batch_size, seq_length, embedding_dim), unnormalized weights.
+
+    Returns:
+        Tensor of shape (batch_size, seq_length, embedding_dim)
+    """
+    #
+    # Exponentiate L to obtain positive weights
+    #
+    L_exp = torch.exp(L).clamp(min=1e-9, max=1e6)
+
+    #
+    # Compute the (unnormalized) weighted cumulative sum of v: (l1*v1, l1*v1 + l2*v2, ...)
+    #
+    cumsum_v = torch.cumsum(L_exp * v, dim=1)
+
+    #
+    # Compute the cumulative sum of the weights: (l1, l1 + l2, l1 + l2 + l3, ...)
+    #
+    cumsum_weights = torch.cumsum(L_exp, dim=1).clamp(min=1e-9)
+
+    #
+    # Normalize the cumulative sum by dividing by the cumulative weights
+    #
+    return cumsum_v / cumsum_weights
 
