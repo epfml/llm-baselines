@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 #import src.models.randatt.attention
 from .attention import SelfAttention, CrossAttention, RandomBlockSelfAttention, RandomBlockCrossAttention
-from .tools import causal_mask, alibi_shift, weighted_cumsum
+from .tools import causal_mask, alibi_shift, softmax_cumsum, geometric_cumsum
 
 
 from ..tools import LayerNorm
@@ -42,7 +42,7 @@ class MLP(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False, eps=0.1, gamma=0.9, use_cumsum: bool=False, trainable_cumsum=False):
+    def __init__(self, model_dim, n_heads=2, dropout_rate=0.1, act=nn.GELU(), block_dim=None, bias: bool= False, eps=0.1, gamma=0.9, use_cumsum: bool=False, trainable_cumsum=False, use_softmax_cumsum=False):
 
         super().__init__()
 
@@ -67,6 +67,11 @@ class EncoderBlock(nn.Module):
         self.use_cumsum = use_cumsum  # Toggle cumulative sum
         
         self.trainable_cumsum = trainable_cumsum
+        self.use_softmax_cumsum = use_softmax_cumsum
+
+        if self.use_softmax_cumsum:
+
+            self.lin_L = nn.Linear(model_dim, model_dim, bias=bias)
 
         if self.trainable_cumsum:
             self.weights_eps = nn.Parameter(torch.tensor(math.log(eps / (1 - eps)), dtype=torch.float32))
@@ -110,10 +115,32 @@ class EncoderBlock(nn.Module):
             eps = self.eps
             gamma = self.gamma
 
+        #Calculate L for the softmax_cumsum if use_softmaxcumsum used
+        if self.use_softmax_cumsum:
+            L = self.lin_L(self.norm1(x))
 
         x, keys, values = self.attention_fn(x, mask, shift)
-        if self.use_cumsum:
-            cumsum_output = weighted_cumsum(x, gamma)
+        
+        if self.use_cumsum or self.use_softmax_cumsum:
+            #
+            # Identify in-sequence vectors
+            #
+            in_seq = mask[..., :1]
+
+            if self.use_softmax_cumsum:
+                cumsum_output = softmax_cumsum(values, L) * in_seq
+            else:
+                #
+                # Compute the EMA of values for in-sequence elements
+                #
+                cumsum_output = geometric_cumsum(values, gamma) * in_seq
+
+                #
+                # Update the mix in the unattended in-sequence values
+                #
+            
+            # cumsum_output = tools.causal_weighted_cumsum(values, gamma) 
+            eps = eps * in_seq
             x = (1 - eps) * x + eps * cumsum_output
         x = self.mlp_fn(x)
         
@@ -149,9 +176,9 @@ class DecoderBlock(EncoderBlock):
 
 class LightEncoderBlock(EncoderBlock):
 
-    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(),bias: bool = False, eps=0.1, gamma=0.9, use_cumsum: bool=False,trainable_cumsum=False):
+    def __init__(self, model_dim, block_dim=100, n_heads=2, dropout_rate=0.1, act=nn.GELU(), bias: bool = False, eps=0.1, gamma=0.9, use_cumsum: bool=False,trainable_cumsum=False, use_softmax_cumsum=False):
         print(f"Initializing LightEncoderBlock with block_dim={block_dim}")
-        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias, eps=eps, gamma=gamma, use_cumsum= use_cumsum, trainable_cumsum=trainable_cumsum )
+        super().__init__(model_dim, n_heads, dropout_rate, act, bias= bias, eps=eps, gamma=gamma, use_cumsum= use_cumsum, trainable_cumsum=trainable_cumsum,use_softmax_cumsum=use_softmax_cumsum )
         self.attention = RandomBlockSelfAttention(model_dim, block_dim, n_heads, act, bias= bias)
 
 
