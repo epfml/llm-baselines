@@ -15,7 +15,8 @@ from data.utils import get_dataset
 from optim.base import train_base
 import distributed
 
-from ptflops.flops_counter import add_flops_counting_methods
+from ptflops import get_model_complexity_info
+
 
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -59,24 +60,20 @@ def main(args):
 
     # ADD FLOPs COUNTING
     if distributed_backend.is_master_process():
-        model = add_flops_counting_methods(model)
-        model.eval()
-
-        # Create dummy input for FLOPs evaluation
-        dummy_input = torch.randint(
-            0, args.vocab_size, (args.batch_size, args.sequence_length)
-        ).to(args.device)
-
-        with torch.no_grad():
-            model.start_flops_count()
-            _ = model(dummy_input)
-            flops = model.compute_average_flops_cost()
-            model.stop_flops_count()
-
+        macs, params = get_model_complexity_info(
+            model,
+            (args.sequence_length,),
+            as_strings=False,
+            print_per_layer_stat=False,
+            verbose=False,
+        )
+        flops = 2 * macs  # FLOPs = 2 * MACs for most operations
         print(f"[FLOPs] Forward pass FLOPs: {flops / 1e9:.2f} GFLOPs")
-        if args.wandb and distributed_backend.is_master_process():
+
+        if args.wandb:
             wandb.log({"flops_gflops": flops / 1e9})
-            
+
+
     model = distributed_backend.transform_model(model)
     
     group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()

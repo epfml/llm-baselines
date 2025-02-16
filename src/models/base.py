@@ -21,7 +21,7 @@ from .randatt.tools import causal_mask, alibi_shift
 from .tools import LayerNorm
 
 
-from ptflops.flops_counter import add_flops_counting_methods
+from ptflops import get_model_complexity_info
 
 
 
