@@ -20,7 +20,10 @@ from .randatt.tools import causal_mask, alibi_shift
 
 from .tools import LayerNorm
 
-from fvcore.nn.jit_analysis import add_custom_ops
+from fvcore.nn import FlopCountAnalysis
+
+
+
 
 def attention_flop_counter(module, inputs, outputs):
     """
@@ -62,7 +65,7 @@ def attention_flop_counter(module, inputs, outputs):
     return total_flops
 
 
-add_custom_ops({CausalSelfAttention: attention_flop_counter})
+FlopCountAnalysis.register_op(CausalSelfAttention, attention_flop_counter)
 
 
 
