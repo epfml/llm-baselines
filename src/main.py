@@ -60,19 +60,23 @@ def main(args):
 
     # ADD FLOPs COUNTING
     if distributed_backend.is_master_process():
+        def input_constructor():
+            return (torch.randint(0, args.vocab_size, (1, args.sequence_length), dtype=torch.long).to(args.device),)
+
         macs, params = get_model_complexity_info(
             model,
             (args.sequence_length,),
             as_strings=False,
             print_per_layer_stat=False,
             verbose=False,
+            input_constructor=input_constructor,
         )
+
         flops = 2 * macs  # FLOPs = 2 * MACs for most operations
         print(f"[FLOPs] Forward pass FLOPs: {flops / 1e9:.2f} GFLOPs")
 
         if args.wandb:
             wandb.log({"flops_gflops": flops / 1e9})
-
 
     model = distributed_backend.transform_model(model)
     
