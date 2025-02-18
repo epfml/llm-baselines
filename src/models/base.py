@@ -83,6 +83,11 @@ class CausalSelfAttention(nn.Module):
         self.ratio_heads = getattr(config, "ratio_heads", 0)
         self.reduction_factor = getattr(config, "reduction_factor", 0.5)
 
+        # New: specify different context window sizes per head group.
+        self.context_full = config.context_full if config.context_full is not None else config.sequence_length
+        self.context_reduced = config.context_reduced if config.context_reduced is not None else config.sequence_length
+
+
         # Compute the number of full-sized and reduced-dimension heads
         self.n_reduced_heads = int(self.n_head * self.ratio_heads)
         self.n_full_heads = self.n_head - self.n_reduced_heads
@@ -111,65 +116,60 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        # q, k ,v  = self.c_attn(x).split(self.n_embd, dim=2)
-        # k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        # q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        # v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        device = x.device
 
-        # Compute full-size projections if applicable
+        # FULL HEADS: compute q, k, v normally
         if self.n_full_heads > 0:
             q_full, k_full, v_full = self.qkv_full(x).split(self.n_full_heads * self.head_dim, dim=2)
             q_full = q_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             k_full = k_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             v_full = v_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
+            # Build a causal mask that only allows attention to the last context_full tokens.
+            # For each query position i, allowed keys are j where 0 <= j <= i and (i - j) < context_full.
+            i_idx = torch.arange(T, device=device).unsqueeze(1)
+            j_idx = torch.arange(T, device=device).unsqueeze(0)
+            mask_full = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_full)
+            attn_mask_full = mask_full.float() * float('-inf')
+            y_full = torch.nn.functional.scaled_dot_product_attention(
+                q_full, k_full, v_full,
+                attn_mask=attn_mask_full,
+                dropout_p=self.dropout,
+                is_causal=False  # our custom mask already enforces causality and windowing
+            )
         else:
-            q_full, k_full, v_full = None, None, None
-        
-        # Compute reduced-size projections if applicable
-        # Compute reduced-size projections if applicable
+            y_full = None
+
+        # REDUCED HEADS: compute q, k, v with reduced key/query dims
         if self.use_reduced_heads and self.n_reduced_heads > 0:
             qk_reduced = self.qk_reduced(x).split(self.n_reduced_heads * self.reduced_dim, dim=2)
-            q_reduced, k_reduced = [t.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2) for t in qk_reduced]
+            q_reduced, k_reduced = [t.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
+                                     for t in qk_reduced]
             v_reduced = self.v_reduced(x).view(B, T, self.n_reduced_heads, self.head_dim).transpose(1, 2)
+            i_idx = torch.arange(T, device=device).unsqueeze(1)
+            j_idx = torch.arange(T, device=device).unsqueeze(0)
+            mask_reduced = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_reduced)
+            attn_mask_reduced = mask_reduced.float() * float('-inf')
+            y_reduced = torch.nn.functional.scaled_dot_product_attention(
+                q_reduced, k_reduced, v_reduced,
+                attn_mask=attn_mask_reduced,
+                dropout_p=self.dropout,
+                is_causal=False
+            )
         else:
-            q_reduced, k_reduced, v_reduced = None, None, None
-        
-        # Compute attention separately for full and reduced heads
-        y_full, y_reduced = None, None
-        
-        if self.n_full_heads > 0:
-            y_full = F.scaled_dot_product_attention(q_full, k_full, v_full, attn_mask=None, dropout_p=self.dropout, is_causal=True)
-        
-        if self.use_reduced_heads and self.n_reduced_heads > 0:
-            y_reduced = F.scaled_dot_product_attention(q_reduced, k_reduced, v_reduced, attn_mask=None, dropout_p=self.dropout, is_causal=True)
-        # Concatenate attention outputs after computing attention
+            y_reduced = None
+
+        # Combine the outputs from the two groups (concatenating along the head dimension)
         if self.use_reduced_heads:
-            if self.n_full_heads > 0 and self.n_reduced_heads > 0:
+            if y_full is not None and y_reduced is not None:
                 y = torch.cat([y_full, y_reduced], dim=1)
-            elif self.n_full_heads > 0:
+            elif y_full is not None:
                 y = y_full
             else:
                 y = y_reduced
         else:
             y = y_full
 
-
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        # if self.flash:
-        #     # efficient attention using Flash Attention CUDA kernels
-        #     y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
-        # else:
-        #     # manual implementation of attention
-        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        #     att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-        #     att = F.softmax(att, dim=-1)
-        #     att = self.attn_dropout(att)
-        #     y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
-
-        # output projection
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_dropout(self.c_proj(y))
         return y
 

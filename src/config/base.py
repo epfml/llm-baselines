@@ -70,6 +70,10 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--reduction_factor', default=0.5, type=float, help='Factor by which to reduce query/key dimension (only applied to reduced heads)')
     parser.add_argument("--use_softmax_cumsum", action="store_true", help="Enable softmax cumsum for cumulative sum attention")
 
+    parser.add_argument('--context_full', default=512, type=int,
+                    help='Context window size for full-dimension heads (number of tokens full heads attend to)')
+    parser.add_argument('--context_reduced', default=1024, type=int,
+                    help='Context window size for reduced-dimension heads (number of tokens reduced heads attend to)')
 
 
     args = parser.parse_args(args, namespace)
