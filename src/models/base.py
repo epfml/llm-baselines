@@ -134,13 +134,21 @@ class CausalSelfAttention(nn.Module):
             q_full = q_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             k_full = k_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             v_full = v_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
-            attn_mask_full = self.mask_full[:T, :T]
-            y_full = torch.nn.functional.scaled_dot_product_attention(
-                q_full, k_full, v_full,
-                attn_mask=attn_mask_full,
-                dropout_p=self.dropout,
-                is_causal=False  # our custom mask already enforces causality and windowing
-            )
+            if self.context_full == self.sequence_length:
+                y_reduced = torch.nn.functional.scaled_dot_product_attention(
+                    q_full, k_full, v_full,
+                    attn_mask=None,
+                    dropout_p=self.dropout,
+                    is_causal=True
+                )
+            else:
+                attn_mask_full = self.mask_full[:T, :T]
+                y_full = torch.nn.functional.scaled_dot_product_attention(
+                    q_full, k_full, v_full,
+                    attn_mask=attn_mask_full,
+                    dropout_p=self.dropout,
+                    is_causal=False  # our custom mask already enforces causality and windowing
+                )
         else:
             y_full = None
 
