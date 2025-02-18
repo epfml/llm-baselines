@@ -86,7 +86,7 @@ class CausalSelfAttention(nn.Module):
         # New: specify different context window sizes per head group.
         self.context_full = config.context_full if config.context_full is not None else config.sequence_length
         self.context_reduced = config.context_reduced if config.context_reduced is not None else config.sequence_length
-
+        self.sequence_length = config.sequence_length
 
         # Compute the number of full-sized and reduced-dimension heads
         self.n_reduced_heads = int(self.n_head * self.ratio_heads)
@@ -145,16 +145,24 @@ class CausalSelfAttention(nn.Module):
             q_reduced, k_reduced = [t.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
                                      for t in qk_reduced]
             v_reduced = self.v_reduced(x).view(B, T, self.n_reduced_heads, self.head_dim).transpose(1, 2)
-            i_idx = torch.arange(T, device=device).unsqueeze(1)
-            j_idx = torch.arange(T, device=device).unsqueeze(0)
-            mask_reduced = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_reduced)
-            attn_mask_reduced = mask_reduced.float() * float('-inf')
-            y_reduced = torch.nn.functional.scaled_dot_product_attention(
-                q_reduced, k_reduced, v_reduced,
-                attn_mask=attn_mask_reduced,
-                dropout_p=self.dropout,
-                is_causal=False
-            )
+            if self.context_reduced == self.sequence_length:
+                y_reduced = torch.nn.functional.scaled_dot_product_attention(
+                    q_reduced, k_reduced, v_reduced,
+                    attn_mask=None,
+                    dropout_p=self.dropout,
+                    is_causal=True
+                )
+            else:
+                i_idx = torch.arange(T, device=device).unsqueeze(1)
+                j_idx = torch.arange(T, device=device).unsqueeze(0)
+                mask_reduced = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_reduced)
+                attn_mask_reduced = mask_reduced.float() * float('-inf')
+                y_reduced = torch.nn.functional.scaled_dot_product_attention(
+                    q_reduced, k_reduced, v_reduced,
+                    attn_mask=attn_mask_reduced,
+                    dropout_p=self.dropout,
+                    is_causal=False
+                )
         else:
             y_reduced = None
 
