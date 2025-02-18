@@ -176,6 +176,7 @@ class CausalSelfAttention(nn.Module):
                 y = y_reduced
         else:
             y = y_full
+        print(f"Before view: {y.shape}, expected: {(B, T, C)}")
 
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_dropout(self.c_proj(y))
