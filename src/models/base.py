@@ -89,13 +89,7 @@ class CausalSelfAttention(nn.Module):
         self.sequence_length = config.sequence_length
         self.register_buffer("mask_full", self._build_causal_window_mask(self.context_full))
         self.register_buffer("mask_reduced", self._build_causal_window_mask(self.context_reduced))
-        def _build_causal_window_mask(self, context_window):
-            T = self.sequence_length
-            i_idx = torch.arange(T).unsqueeze(1)
-            j_idx = torch.arange(T).unsqueeze(0)
-            mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
-            # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
-            return mask.float() * float('-inf')  # shape: (T, T)
+        
 
 
         # Compute the number of full-sized and reduced-dimension heads
@@ -122,7 +116,13 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.sequence_length, config.sequence_length))
                                         .view(1, 1, config.sequence_length, config.sequence_length))
-
+    def _build_causal_window_mask(self, context_window):
+            T = self.sequence_length
+            i_idx = torch.arange(T).unsqueeze(1)
+            j_idx = torch.arange(T).unsqueeze(0)
+            mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
+            # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
+            return mask.float() * float('-inf')  # shape: (T, T)
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
