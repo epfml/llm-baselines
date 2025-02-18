@@ -203,7 +203,7 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        print(f"Initializing Block with attention_type={config.attention_type}")
+        #print(f"Initializing Block with attention_type={config.attention_type}")
 
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn_block = CausalSelfAttention(config)
