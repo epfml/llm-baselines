@@ -122,7 +122,7 @@ class CausalSelfAttention(nn.Module):
             j_idx = torch.arange(T).unsqueeze(0)
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
             # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
-            return mask.float() * float('-inf')  # shape: (T, T)
+            return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
