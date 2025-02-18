@@ -87,6 +87,16 @@ class CausalSelfAttention(nn.Module):
         self.context_full = config.context_full if config.context_full is not None else config.sequence_length
         self.context_reduced = config.context_reduced if config.context_reduced is not None else config.sequence_length
         self.sequence_length = config.sequence_length
+        self.register_buffer("mask_full", self._build_causal_window_mask(self.context_full))
+        self.register_buffer("mask_reduced", self._build_causal_window_mask(self.context_reduced))
+        def _build_causal_window_mask(self, context_window):
+            T = self.sequence_length
+            i_idx = torch.arange(T).unsqueeze(1)
+            j_idx = torch.arange(T).unsqueeze(0)
+            mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
+            # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
+            return mask.float() * float('-inf')  # shape: (T, T)
+
 
         # Compute the number of full-sized and reduced-dimension heads
         self.n_reduced_heads = int(self.n_head * self.ratio_heads)
@@ -124,12 +134,7 @@ class CausalSelfAttention(nn.Module):
             q_full = q_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             k_full = k_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
             v_full = v_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
-            # Build a causal mask that only allows attention to the last context_full tokens.
-            # For each query position i, allowed keys are j where 0 <= j <= i and (i - j) < context_full.
-            i_idx = torch.arange(T, device=device).unsqueeze(1)
-            j_idx = torch.arange(T, device=device).unsqueeze(0)
-            mask_full = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_full)
-            attn_mask_full = mask_full.float() * float('-inf')
+            attn_mask_full = self.mask_full[:T, :T]
             y_full = torch.nn.functional.scaled_dot_product_attention(
                 q_full, k_full, v_full,
                 attn_mask=attn_mask_full,
@@ -153,10 +158,7 @@ class CausalSelfAttention(nn.Module):
                     is_causal=True
                 )
             else:
-                i_idx = torch.arange(T, device=device).unsqueeze(1)
-                j_idx = torch.arange(T, device=device).unsqueeze(0)
-                mask_reduced = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= self.context_reduced)
-                attn_mask_reduced = mask_reduced.float() * float('-inf')
+                attn_mask_reduced = self.mask_reduced[:T, :T]
                 y_reduced = torch.nn.functional.scaled_dot_product_attention(
                     q_reduced, k_reduced, v_reduced,
                     attn_mask=attn_mask_reduced,
