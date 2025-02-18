@@ -20,6 +20,7 @@ from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
 from optim.adopt import ADOPT
+from optim.adopt_ademamix import ADOPTAdEMAMix
 from optim.base import train
 from optim.cautious import (CautiousAdafactor, CautiousAdamW, CautiousAdEMAMix,
                             CautiousADOPT, CautiousLion, CautiousMuon,
@@ -236,8 +237,8 @@ def main(args, parser):
                 alpha_warmup=args.adema_alpha_warmup,
                 weight_decay=args.weight_decay,
             )
-    elif args.opt == "ademamix2":
-        opt = AdEMAMix2(
+    elif args.opt == "adoptademamix":
+        opt = ADOPTAdEMAMix(
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2, args.adema_beta3),
@@ -245,6 +246,8 @@ def main(args, parser):
             beta3_warmup=args.adema_beta3_warmup,
             alpha_warmup=args.adema_alpha_warmup,
             weight_decay=args.weight_decay,
+            eps=args.adopt_eps,
+            decouple=args.adopt_decouple,
         )
     elif args.opt == "lion":
         if args.cautious:

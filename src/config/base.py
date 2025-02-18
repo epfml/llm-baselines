@@ -94,7 +94,7 @@ def parse_args(base_parser, args, namespace):
             "muon",
             "soap",
             "ademamix",
-            "ademamix2",
+            "adoptademamix",
             "lion",
             "sf-adamw",
             "sf-sgd",
