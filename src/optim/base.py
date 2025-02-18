@@ -206,6 +206,13 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                                 py_rng_state=random.getstate(),
                                 train_sampler_state=sampler_state_before_iter,
                                 ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
+        if itr == 0:
+            print(f"First batch logits: {logits}")
+            print(f"First batch loss: {loss}")
+            if torch.isnan(loss):
+                print("NaN detected in loss on first batch!")
+                exit(1)
+
                 
     if distributed_backend.is_master_process():
         print(f"saving checkpoint to {ckpt_path}")
