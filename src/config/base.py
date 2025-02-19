@@ -76,22 +76,15 @@ def parse_args(base_parser, args, namespace):
 
     args = parser.parse_args(args, namespace)
 
-    if args.use_reduced_heads:
-        assert args.n_heads_short is not None, "n_heads_short must be provided if use_reduced_heads is set."
-        assert args.n_heads_long is not None, "n_heads_long must be provided if use_reduced_heads is set."
-        args.n_head = args.n_heads_short + args.n_heads_long
-
-        if args.short_heads_dim is None:
-            args.short_heads_dim = args.n_embd // args.n_head
-        if args.long_heads_dim is None:
-            args.long_heads_dim = args.n_embd // args.n_head
-    else:
-        if args.n_head is None:
-            args.n_head = 12
-
+    if args.n_heads_short is None and args.n_heads_long is None:
         args.n_heads_short = args.n_head
         args.n_heads_long = 0
+
+    args.n_head = args.n_heads_short + args.n_heads_long
+
+    if args.short_heads_dim is None:
         args.short_heads_dim = args.n_embd // args.n_head
+    if args.long_heads_dim is None:
         args.long_heads_dim = args.n_embd // args.n_head
 
     if args.exp_name is None:
