@@ -33,15 +33,40 @@ def attention_flop_counter(module, inputs, outputs):
     context_window_short = min(T, module.context_short)
     context_window_long = min(T, module.context_long)
 
+    # Projection FLOPs for Q, K, V
     flops_qk_short = B * T * C * (2 * n_heads_short * short_dim) if n_heads_short > 0 else 0
     flops_v_short = B * T * C * (n_heads_short * head_dim) if n_heads_short > 0 else 0
 
     flops_qk_long = B * T * C * (2 * n_heads_long * long_dim) if n_heads_long > 0 else 0
     flops_v_long = B * T * C * (n_heads_long * head_dim) if n_heads_long > 0 else 0
 
-    flops_attn_short = B * n_heads_short * T * (context_window_short * short_dim + context_window_short + context_window_short * head_dim) * 2 if n_heads_short > 0 else 0
-    flops_attn_long = B * n_heads_long * T * (context_window_long * long_dim + context_window_long + context_window_long * head_dim) * 2 if n_heads_long > 0 else 0
+    # Count non-zero elements for more accurate QK^T and softmax/V-weighting FLOPs
+    def compute_non_zero_elements(T, window_size):
+        if window_size >= T:
+            # Full causal mask (lower triangular), roughly T*(T+1)/2 non-zeros
+            return T * (T + 1) // 2
+        else:
+            # Windowed attention mask with causal constraint
+            # Each row i attends to min(i + 1, window_size) elements
+            return sum(min(i + 1, window_size) for i in range(T))
 
+    non_zero_short = compute_non_zero_elements(T, context_window_short) if n_heads_short > 0 else 0
+    non_zero_long = compute_non_zero_elements(T, context_window_long) if n_heads_long > 0 else 0
+
+    # QK^T computation + softmax + weighted sum with V (attention application)
+    flops_attn_short = B * n_heads_short * (
+        non_zero_short * short_dim  # QK^T
+        + non_zero_short  # Softmax
+        + non_zero_short * head_dim  # Weighted sum with V
+    ) * 2 if n_heads_short > 0 else 0
+
+    flops_attn_long = B * n_heads_long * (
+        non_zero_long * long_dim
+        + non_zero_long
+        + non_zero_long * head_dim
+    ) * 2 if n_heads_long > 0 else 0
+
+    # Output projection
     flops_output_proj = B * T * C * C
 
     total_flops = (
@@ -52,6 +77,7 @@ def attention_flop_counter(module, inputs, outputs):
     )
 
     return total_flops
+
 
 # def attention_flop_counter(module, inputs, outputs):
 #     B, T, C = inputs[0].shape
