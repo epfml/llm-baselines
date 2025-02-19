@@ -3,6 +3,7 @@ Here is an original implementation of ADOPT.
 Source: https://github.com/iShohei220/adopt
 """
 
+
 import torch
 
 
@@ -54,7 +55,6 @@ class ADOPT(torch.optim.Optimizer):
             grads = []
             exp_avgs = []
             exp_avg_sqs = []
-            state_steps = []
             beta1, beta2 = group["betas"]
 
             for p in group["params"]:
@@ -70,7 +70,7 @@ class ADOPT(torch.optim.Optimizer):
                 state = self.state[p]
 
                 if len(state) == 0:
-                    state["step"] = torch.tensor(0.0)
+                    state["step"] = 0
                     state["exp_avg"] = torch.zeros_like(
                         p, memory_format=torch.preserve_format
                     )
@@ -80,18 +80,17 @@ class ADOPT(torch.optim.Optimizer):
 
                 exp_avgs.append(state["exp_avg"])
                 exp_avg_sqs.append(state["exp_avg_sq"])
-                state_steps.append(state["step"])
 
             for i, param in enumerate(params_with_grad):
                 grad = grads[i]
                 exp_avg = exp_avgs[i]
                 exp_avg_sq = exp_avg_sqs[i]
-                step_t = state_steps[i]
-                step = int(step_t.item())
+                state = self.state[param]
+                step = state["step"]
 
                 if step == 0:
                     exp_avg_sq.addcmul_(grad, grad)
-                    step_t += 1
+                    state["step"] += 1
                     continue
 
                 if group["weight_decay"] != 0:
@@ -111,6 +110,6 @@ class ADOPT(torch.optim.Optimizer):
                 param.data.add_(exp_avg, alpha=-group["lr"])
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
-                step_t += 1
+                state["step"] += 1
 
         return loss
