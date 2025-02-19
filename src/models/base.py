@@ -109,13 +109,11 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
-        self.head_dim = self.n_embd // self.n_head
 
-
-        self.use_long_heads = config.use_long_heads
         self.context_short = config.context_short or config.sequence_length
         self.context_long = config.context_long or config.sequence_length
         self.sequence_length = config.sequence_length
+        self.head_dim = self.n_embd // self.n_head
         self.n_heads_short = config.n_heads_short
         self.n_heads_long = config.n_heads_long
         self.short_heads_dim = config.short_heads_dim
