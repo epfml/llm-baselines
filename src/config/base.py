@@ -65,16 +65,38 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--gamma", type=float, default=0.9, help="Decay factor for cumsum")
     parser.add_argument("--use_cumsum", action="store_true", help="Should we use cumsum")
     parser.add_argument("--trainable_cumsum",action="store_true",help="Enable training of eps and gamma for cumulative sum",)
-    parser.add_argument('--use_reduced_heads', action='store_true', help='Enable reduced-dimensional queries/keys for a subset of heads')
-    parser.add_argument('--ratio_heads', default=0.0, type=float, help='Fraction of heads using reduced-dimensional keys/queries (0.0 means all heads are full-sized)')
-    parser.add_argument('--reduction_factor', default=0.5, type=float, help='Factor by which to reduce query/key dimension (only applied to reduced heads)')
     parser.add_argument("--use_softmax_cumsum", action="store_true", help="Enable softmax cumsum for cumulative sum attention")
 
-    # In your argument parser (parse_args):
-    parser.add_argument('--context_full', default=None, type=int,
-                        help='Context window size for full-dimension heads. Defaults to sequence_length if not provided.')
-    parser.add_argument('--context_reduced', default=None, type=int,
-                    help='Context window size for reduced-dimension heads. Defaults to sequence_length if not provided.')
+    parser.add_argument('--n_heads_short', default=None, type=int)
+    parser.add_argument('--n_heads_long', default=None, type=int)
+    parser.add_argument('--short_heads_dim', default=None, type=int)
+    parser.add_argument('--long_heads_dim', default=None, type=int)
+    parser.add_argument('--context_short', default=None, type=int)
+    parser.add_argument('--context_long', default=None, type=int)
+
+    args = parser.parse_args(args, namespace)
+
+    if args.use_reduced_heads:
+        assert args.n_heads_short is not None, "n_heads_short must be provided if use_reduced_heads is set."
+        assert args.n_heads_long is not None, "n_heads_long must be provided if use_reduced_heads is set."
+        args.n_head = args.n_heads_short + args.n_heads_long
+
+        if args.short_heads_dim is None:
+            args.short_heads_dim = args.n_embd // args.n_head
+        if args.long_heads_dim is None:
+            args.long_heads_dim = args.n_embd // args.n_head
+    else:
+        if args.n_head is None:
+            args.n_head = 12
+
+        args.n_heads_short = args.n_head
+        args.n_heads_long = 0
+        args.short_heads_dim = args.n_embd // args.n_head
+        args.long_heads_dim = args.n_embd // args.n_head
+
+    if args.exp_name is None:
+        args.exp_name = f"{args.model}_lr{args.lr}_bs{args.batch_size}x{args.acc_steps}_seqlen{args.sequence_length}_seed={args.seed}"
+
 
 
 

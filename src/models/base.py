@@ -22,30 +22,61 @@ from .tools import LayerNorm
 
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
+
 def attention_flop_counter(module, inputs, outputs):
     B, T, C = inputs[0].shape
-    n_full_heads = module.n_full_heads
-    n_reduced_heads = module.n_reduced_heads
+    n_heads_short = module.n_heads_short
+    n_heads_long = module.n_heads_long
+    short_dim = module.short_heads_dim
+    long_dim = module.long_heads_dim
     head_dim = module.head_dim
-    reduced_dim = module.reduced_dim
+    context_window_short = min(T, module.context_short)
+    context_window_long = min(T, module.context_long)
 
-    flops_qkv_full = B * T * C * (3 * n_full_heads * head_dim) if n_full_heads > 0 else 0
-    flops_qkv_reduced = B * T * C * (2 * n_reduced_heads * reduced_dim + n_reduced_heads * head_dim) if n_reduced_heads > 0 else 0
+    flops_qk_short = B * T * C * (2 * n_heads_short * short_dim) if n_heads_short > 0 else 0
+    flops_v_short = B * T * C * (n_heads_short * head_dim) if n_heads_short > 0 else 0
 
-    flops_attn_full = B * n_full_heads * T * (T * head_dim + T + T * head_dim) * 2 if n_full_heads > 0 else 0
-    flops_attn_reduced = B * n_reduced_heads * T * (T * reduced_dim + T + T * head_dim) * 2 if n_reduced_heads > 0 else 0
+    flops_qk_long = B * T * C * (2 * n_heads_long * long_dim) if n_heads_long > 0 else 0
+    flops_v_long = B * T * C * (n_heads_long * head_dim) if n_heads_long > 0 else 0
+
+    flops_attn_short = B * n_heads_short * T * (context_window_short * short_dim + context_window_short + context_window_short * head_dim) * 2 if n_heads_short > 0 else 0
+    flops_attn_long = B * n_heads_long * T * (context_window_long * long_dim + context_window_long + context_window_long * head_dim) * 2 if n_heads_long > 0 else 0
 
     flops_output_proj = B * T * C * C
 
     total_flops = (
-        flops_qkv_full
-        + flops_qkv_reduced
-        + flops_attn_full
-        + flops_attn_reduced
-        + flops_output_proj
+        flops_qk_short + flops_v_short +
+        flops_qk_long + flops_v_long +
+        flops_attn_short + flops_attn_long +
+        flops_output_proj
     )
 
     return total_flops
+
+# def attention_flop_counter(module, inputs, outputs):
+#     B, T, C = inputs[0].shape
+#     n_full_heads = module.n_full_heads
+#     n_long_heads = module.n_long_heads
+#     head_dim = module.head_dim
+#     long_dim = module.long_dim
+
+#     flops_qkv_full = B * T * C * (3 * n_full_heads * head_dim) if n_full_heads > 0 else 0
+#     flops_qkv_long = B * T * C * (2 * n_long_heads * long_dim + n_long_heads * head_dim) if n_long_heads > 0 else 0
+
+#     flops_attn_full = B * n_full_heads * T * (T * head_dim + T + T * head_dim) * 2 if n_full_heads > 0 else 0
+#     flops_attn_long = B * n_long_heads * T * (T * long_dim + T + T * head_dim) * 2 if n_long_heads > 0 else 0
+
+#     flops_output_proj = B * T * C * C
+
+#     total_flops = (
+#         flops_qkv_full
+#         + flops_qkv_long
+#         + flops_attn_full
+#         + flops_attn_long
+#         + flops_output_proj
+#     )
+
+#     return total_flops
 
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
@@ -79,35 +110,25 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
 
-        self.use_reduced_heads = getattr(config, "use_reduced_heads", False)
-        self.ratio_heads = getattr(config, "ratio_heads", 0)
-        self.reduction_factor = getattr(config, "reduction_factor", 0.5)
-
-        # New: specify different context window sizes per head group.
-        self.context_full = config.context_full if config.context_full is not None else config.sequence_length
-        self.context_reduced = config.context_reduced if config.context_reduced is not None else config.sequence_length
+        self.use_long_heads = config.use_long_heads
+        self.context_short = config.context_short or config.sequence_length
+        self.context_long = config.context_long or config.sequence_length
         self.sequence_length = config.sequence_length
-        self.register_buffer("mask_full", self._build_causal_window_mask(self.context_full))
-        self.register_buffer("mask_reduced", self._build_causal_window_mask(self.context_reduced))
-        
-
-
-        # Compute the number of full-sized and reduced-dimension heads
-        self.n_reduced_heads = int(self.n_head * self.ratio_heads)
-        self.n_full_heads = self.n_head - self.n_reduced_heads
         self.head_dim = self.n_embd // self.n_head
-        self.reduced_dim = int(self.head_dim * self.reduction_factor)
-        
-        # Standard full-dimension projections
-        if self.n_full_heads > 0:
-            self.qkv_full = nn.Linear(self.n_embd, 3 * self.n_full_heads * self.head_dim, bias=config.bias)
-            #self.v_full = nn.Linear(self.n_embd, self.n_full_heads * self.head_dim, bias=config.bias)
-        
-        # Reduced-dimension projections if enabled
-        if self.use_reduced_heads and self.n_reduced_heads > 0:
-            print(f"Normal head dim: {self.head_dim}, Using reduced head dim: {self.reduced_dim} for {self.n_reduced_heads}/{self.n_head} heads")
-            self.qk_reduced = nn.Linear(self.n_embd, 2 * self.n_reduced_heads * self.reduced_dim, bias=config.bias)
-            self.v_reduced = nn.Linear(self.n_embd, self.n_reduced_heads * self.head_dim, bias=config.bias)
+        self.n_heads_short = config.n_heads_short
+        self.n_heads_long = config.n_heads_long
+        self.short_heads_dim = config.short_heads_dim
+        self.long_heads_dim = config.long_heads_dim
+        if self.n_heads_short > 0:
+            self.qk_short = nn.Linear(self.n_embd, 2 * self.n_heads_short * self.short_heads_dim, bias=config.bias)
+            self.v_short = nn.Linear(self.n_embd, self.n_heads_short * self.head_dim, bias=config.bias)
+        if self.n_heads_long > 0:
+            print(f"Short head dim: {self.short_heads_dim}, Using long head dim: {self.long_heads_dim} for {self.n_heads_long}/{self.n_heads_short + self.n_heads_long} heads")
+            self.qk_long = nn.Linear(self.n_embd, 2 * self.n_heads_long * self.long_heads_dim, bias=config.bias)
+            self.v_long = nn.Linear(self.n_embd, self.n_heads_long * self.head_dim, bias=config.bias)
+
+        self.register_buffer("mask_short", self._build_causal_window_mask(self.context_short))
+        self.register_buffer("mask_long", self._build_causal_window_mask(self.context_long))
 
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -128,68 +149,31 @@ class CausalSelfAttention(nn.Module):
 
         device = x.device
 
-        # FULL HEADS: compute q, k, v normally
-        if self.n_full_heads > 0:
-            q_full, k_full, v_full = self.qkv_full(x).split(self.n_full_heads * self.head_dim, dim=2)
-            q_full = q_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
-            k_full = k_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
-            v_full = v_full.view(B, T, self.n_full_heads, self.head_dim).transpose(1, 2)
-            if self.context_full == self.sequence_length:
-                y_full= torch.nn.functional.scaled_dot_product_attention(
-                    q_full, k_full, v_full,
-                    attn_mask=None,
-                    dropout_p=self.dropout,
-                    is_causal=True
-                )
-            else:
-                attn_mask_full = self.mask_full[:T, :T]
-                y_full = torch.nn.functional.scaled_dot_product_attention(
-                    q_full, k_full, v_full,
-                    attn_mask=attn_mask_full,
-                    dropout_p=self.dropout,
-                    is_causal=False  # our custom mask already enforces causality and windowing
-                )
-        else:
-            y_full = None
+        y_short = None
+        if self.n_heads_short > 0:
+            qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
+            q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
+            v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
+            mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+            y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
 
-        # REDUCED HEADS: compute q, k, v with reduced key/query dims
-        if self.use_reduced_heads and self.n_reduced_heads > 0:
-            qk_reduced = self.qk_reduced(x).split(self.n_reduced_heads * self.reduced_dim, dim=2)
-            q_reduced, k_reduced = [t.view(B, T, self.n_reduced_heads, self.reduced_dim).transpose(1, 2)
-                                     for t in qk_reduced]
-            v_reduced = self.v_reduced(x).view(B, T, self.n_reduced_heads, self.head_dim).transpose(1, 2)
-            if self.context_reduced == self.sequence_length:
-                y_reduced = torch.nn.functional.scaled_dot_product_attention(
-                    q_reduced, k_reduced, v_reduced,
-                    attn_mask=None,
-                    dropout_p=self.dropout,
-                    is_causal=True
-                )
-            else:
-                attn_mask_reduced = self.mask_reduced[:T, :T]
-                y_reduced = torch.nn.functional.scaled_dot_product_attention(
-                    q_reduced, k_reduced, v_reduced,
-                    attn_mask=attn_mask_reduced,
-                    dropout_p=self.dropout,
-                    is_causal=False
-                )
-        else:
-            y_reduced = None
+        y_long = None
+        if self.n_heads_long > 0:
+            qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
+            q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
+            v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
+            mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+            y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
 
         # Combine the outputs from the two groups (concatenating along the head dimension)
-        if self.use_reduced_heads:
-            if y_full is not None and y_reduced is not None:
-                y = torch.cat([y_full, y_reduced], dim=1)
-            elif y_full is not None:
-                y = y_full
-            else:
-                y = y_reduced
-        else:
-            y = y_full
-        #print(f"Before view: {y.shape}, expected: {(B, T, C)}")
+        if y_short is not None and y_long is not None:
+            y = torch.cat([y_short, y_long], dim=1)
+        elif y_short is not None:
+            y = y_short
+        elif y_long is not None:
+            y = y_long
 
         y = y.transpose(1, 2).contiguous().view(B, T, C)
-        #print(f"After view: {y.shape}, expected: {(B, T, C)}")
         y = self.resid_dropout(self.c_proj(y))
         return y
 
