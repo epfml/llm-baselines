@@ -92,9 +92,6 @@ def parse_args(base_parser, args, namespace):
 
 
 
-
-    args = parser.parse_args(args, namespace)
-
     if args.exp_name is None:
         special_name_handle_fields = {"model", "lr", "batch_size", 
                                       "acc_steps", "seed", "exp_name", 
