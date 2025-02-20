@@ -385,7 +385,7 @@ class GPTBase(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
 
-    def forward(self, idx, targets=None, get_logits=False):
+    def forward(self, idx, targets=None, get_logits=False, force_no_flash=False):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.sequence_length, f"Cannot forward sequence of length {t}, block size is only {self.config.sequence_length}"
@@ -397,7 +397,7 @@ class GPTBase(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             if self.config.attention_type == "base":
-                x = block(x)
+                x = block(x, force_no_flash=force_no_flash)
             else:
                 mask = causal_mask(x)
                 x = block(x, mask=mask)
