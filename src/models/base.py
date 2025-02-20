@@ -43,7 +43,7 @@ def attention_flop_counter(module, inputs, outputs):
     # Count non-zero elements for more accurate QK^T and softmax/V-weighting FLOPs
     def compute_non_zero_elements(T, window_size):
         if window_size >= T:
-            # Full causal mask (lower triangular), roughly T*(T+1)/2 non-zeros
+            # Full causal mask (lower triangular), T*(T+1)/2 non-zeros
             return T * (T + 1) // 2
         else:
             # Windowed attention mask with causal constraint
@@ -55,16 +55,16 @@ def attention_flop_counter(module, inputs, outputs):
 
     # QK^T computation + softmax + weighted sum with V (attention application)
     flops_attn_short = B * n_heads_short * (
-        non_zero_short * short_dim  # QK^T
-        + non_zero_short  # Softmax
-        + non_zero_short * head_dim  # Weighted sum with V
-    ) * 2 if n_heads_short > 0 else 0
+        non_zero_short * short_dim +  # QK^T
+        non_zero_short +              # Softmax
+        non_zero_short * head_dim     # Weighted sum with V
+    ) if n_heads_short > 0 else 0
 
     flops_attn_long = B * n_heads_long * (
-        non_zero_long * long_dim
-        + non_zero_long
-        + non_zero_long * head_dim
-    ) * 2 if n_heads_long > 0 else 0
+        non_zero_long * long_dim +
+        non_zero_long +
+        non_zero_long * head_dim
+    ) if n_heads_long > 0 else 0
 
     # Output projection
     flops_output_proj = B * T * C * C
@@ -77,6 +77,7 @@ def attention_flop_counter(module, inputs, outputs):
     )
 
     return total_flops
+
 
 
 # def attention_flop_counter(module, inputs, outputs):
