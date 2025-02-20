@@ -29,7 +29,6 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
         model,
         (dummy_input, dummy_target),
         supported_ops={CausalSelfAttention: attention_flop_counter},
-        verbose=True,
     )
 
     total_flops = sum(flops.values())
