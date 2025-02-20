@@ -79,9 +79,9 @@ def analytical_flop_counter(model, batch_size, sequence_length):
     total_flops_per_layer = 0
     for _ in range(n_layer):
         # Short attention heads
-        flops_short = compute_attention_flops(n_heads_short, short_heads_dim, context_short)
+        flops_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, context_short)
         # Long attention heads
-        flops_long = compute_attention_flops(n_heads_long, long_heads_dim, context_long)
+        flops_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, context_long)
 
         # Output projection once per block (after concatenation of heads)
         flops_output_proj = B * T * C * C
