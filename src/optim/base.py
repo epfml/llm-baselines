@@ -18,25 +18,32 @@ from models.base import CausalSelfAttention, attention_flop_counter
 
 
 def profile_fvcore_flops(model, sequence_length, vocab_size, device):
+    # Dummy input to match your model's input shape
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length), device=device)
     dummy_target = torch.zeros_like(dummy_input)
 
+    # FvCore analysis to get baseline (underestimated due to SPDA)
     flop_analyzer = FlopCountAnalysis(model, (dummy_input, dummy_target))
-    flop_analyzer.set_op_handle(CausalSelfAttention, attention_flop_counter)
+    fvcore_flops = flop_analyzer.total()
 
-    total_flops = flop_analyzer.total()
-    print(f"[FvCore Profiling] Total FLOPs (per forward pass): {total_flops:,}")
+    # Manual attention FLOP estimate (classical attention formula)
+    manual_attn_flops = 0
+    for block in model.transformer.h:
+        manual_attn_flops += attention_flop_counter(
+            block.attn_block, (dummy_input.unsqueeze(0),), None
+        )
+
+    # Final adjustment: use fvcore for projections/mlp, and manually correct attention flops
+    corrected_total_flops = fvcore_flops + manual_attn_flops
+
+    print(f"[FvCore Profiling] Raw FLOPs (excluding SPDA): {fvcore_flops:,}")
+    print(f"[Manual Attention FLOPs] Estimated Attention FLOPs: {manual_attn_flops:,}")
+    print(f"[Corrected Total FLOPs] Total FLOPs (Manual + FvCore): {corrected_total_flops:,}")
+
+    # Optional: Print detailed table from FvCore (useful if you want to see per-layer breakdown)
     print(flop_count_table(flop_analyzer))
 
-    return total_flops
-
-
-
-
-
-
-
-
+    return corrected_total_flops
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
