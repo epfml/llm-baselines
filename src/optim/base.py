@@ -13,7 +13,7 @@ import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
 
-from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count_table
+from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count_table, flop_count
 from models.base import CausalSelfAttention, attention_flop_counter
 
 
@@ -21,12 +21,10 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length), device=device)
     dummy_target = torch.zeros_like(dummy_input)
 
-    def forward_with_no_flash_attention(x, y):
-        return model(x, y, force_no_flash=True)
+    def forward_with_no_flash_attention():
+        return model(dummy_input, dummy_target, force_no_flash=True)
 
-    flop_analyzer = FlopCountAnalysis(
-        model, (dummy_input, dummy_target)
-    )
+    flop_analyzer = FlopCountAnalysis(forward_with_no_flash_attention, ())
     flop_analyzer.set_op_handle(CausalSelfAttention, attention_flop_counter)
 
     total_flops = flop_analyzer.total()
@@ -34,6 +32,7 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     print(flop_count_table(flop_analyzer))
 
     return total_flops
+
 
 
 
