@@ -13,39 +13,7 @@ import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
 
-from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count_table, flop_count
-from models.base import CausalSelfAttention, attention_flop_counter
-
-
-def profile_fvcore_flops(model, sequence_length, vocab_size, device):
-    dummy_input = torch.randint(0, vocab_size, (1, sequence_length), device=device)
-    dummy_target = torch.zeros_like(dummy_input)
-
-    # FvCore analysis to get baseline FLOPs (excluding SPDA)
-    flop_analyzer = FlopCountAnalysis(model, (dummy_input, dummy_target))
-    fvcore_flops = flop_analyzer.total()
-
-    # Unwrap model if using DDP
-    raw_model = model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model
-
-    # Manual attention FLOP estimate
-    manual_attn_flops = 0
-    for block in raw_model.transformer.h:
-        manual_attn_flops += attention_flop_counter(
-            block.attn_block, (dummy_input.unsqueeze(0),), None
-        )
-
-    # Final adjustment: use fvcore for everything except attention
-    corrected_total_flops = fvcore_flops + manual_attn_flops
-
-    print(f"[FvCore Profiling] Raw FLOPs (excluding SPDA): {fvcore_flops:,}")
-    print(f"[Manual Attention FLOPs] Estimated Attention FLOPs: {manual_attn_flops:,}")
-    print(f"[Corrected Total FLOPs] Total FLOPs (Manual + FvCore): {corrected_total_flops:,}")
-
-    # Optional: Print detailed breakdown from FvCore
-    print(flop_count_table(flop_analyzer))
-
-    return corrected_total_flops
+from models.base import CausalSelfAttention, analytical_flop_counter
 
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
@@ -93,10 +61,13 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         model = torch.compile(model) # requires pytorch 2.0+
 
 
-    if  itr == 0 and distributed_backend.is_master_process():
-        total_flops = profile_fvcore_flops(model, sequence_length, extra_args.vocab_size, extra_args.device)
+    if itr == 0 and distributed_backend.is_master_process():
+        # Analytical FLOP estimation
+        total_flops = analytical_flop_counter(model, batch_size=batch_size, sequence_length=sequence_length)
+
         if extra_args.wandb:
-            wandb.log({"model/fvcore_flops": total_flops})
+            wandb.log({"model/analytical_flops": total_flops})
+
 
 
     model.train()
