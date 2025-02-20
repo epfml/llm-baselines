@@ -23,63 +23,62 @@ from .tools import LayerNorm
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
-def forward(self, x, force_no_flash=False):
-    B, T, C = x.size()
+def attention_flop_counter(module, inputs, outputs):
+    print(f"Computing FLOPs for: {module}")
 
-    # For flop profiling, we force flash attention off
-    flash_enabled = self.flash and not force_no_flash
+    B, T, C = inputs[0].shape
+    n_heads_short = module.n_heads_short
+    n_heads_long = module.n_heads_long
+    short_dim = module.short_heads_dim
+    long_dim = module.long_heads_dim
+    head_dim = module.head_dim
+    context_window_short = min(T, module.context_short)
+    context_window_long = min(T, module.context_long)
 
-    y_short = None
-    if self.n_heads_short > 0:
-        qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
-        q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
-        v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
-        mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+    # Projection FLOPs for Q, K, V
+    flops_qk_short = B * T * C * (2 * n_heads_short * short_dim) if n_heads_short > 0 else 0
+    flops_v_short = B * T * C * (n_heads_short * head_dim) if n_heads_short > 0 else 0
 
-        if flash_enabled:
-            y_short = F.scaled_dot_product_attention(
-                q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None
-            )
+    flops_qk_long = B * T * C * (2 * n_heads_long * long_dim) if n_heads_long > 0 else 0
+    flops_v_long = B * T * C * (n_heads_long * head_dim) if n_heads_long > 0 else 0
+
+    # Count non-zero elements for more accurate QK^T and softmax/V-weighting FLOPs
+    def compute_non_zero_elements(T, window_size):
+        if window_size >= T:
+            # Full causal mask (lower triangular), T*(T+1)/2 non-zeros
+            return T * (T + 1) // 2
         else:
-            # Non-flash attention path for profiling purposes
-            attn_weights = (q_short @ k_short.transpose(-2, -1)) / (self.short_heads_dim ** 0.5)
-            if mask_short is not None:
-                attn_weights = attn_weights + mask_short.unsqueeze(0).unsqueeze(0)
-            attn_weights = F.softmax(attn_weights, dim=-1)
-            attn_weights = self.attn_dropout(attn_weights)
-            y_short = attn_weights @ v_short
+            # Windowed attention mask with causal constraint
+            # Each row i attends to min(i + 1, window_size) elements
+            return sum(min(i + 1, window_size) for i in range(T))
 
-    # Same for long heads...
-    y_long = None
-    if self.n_heads_long > 0:
-        qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
-        q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
-        v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
-        mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+    non_zero_short = compute_non_zero_elements(T, context_window_short) if n_heads_short > 0 else 0
+    non_zero_long = compute_non_zero_elements(T, context_window_long) if n_heads_long > 0 else 0
 
-        if flash_enabled:
-            y_long = F.scaled_dot_product_attention(
-                q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None
-            )
-        else:
-            attn_weights = (q_long @ k_long.transpose(-2, -1)) / (self.long_heads_dim ** 0.5)
-            if mask_long is not None:
-                attn_weights = attn_weights + mask_long.unsqueeze(0).unsqueeze(0)
-            attn_weights = F.softmax(attn_weights, dim=-1)
-            attn_weights = self.attn_dropout(attn_weights)
-            y_long = attn_weights @ v_long
+    # QK^T computation + softmax + weighted sum with V (attention application)
+    flops_attn_short = B * n_heads_short * (
+        non_zero_short * short_dim +  # QK^T
+        non_zero_short +              # Softmax
+        non_zero_short * head_dim     # Weighted sum with V
+    ) if n_heads_short > 0 else 0
 
-    if y_short is not None and y_long is not None:
-        y = torch.cat([y_short, y_long], dim=1)
-    elif y_short is not None:
-        y = y_short
-    elif y_long is not None:
-        y = y_long
+    flops_attn_long = B * n_heads_long * (
+        non_zero_long * long_dim +
+        non_zero_long +
+        non_zero_long * head_dim
+    ) if n_heads_long > 0 else 0
 
-    y = y.transpose(1, 2).contiguous().view(B, T, C)
-    y = self.resid_dropout(self.c_proj(y))
-    return y
+    # Output projection
+    flops_output_proj = B * T * C * C
 
+    total_flops = (
+        flops_qk_short + flops_v_short +
+        flops_qk_long + flops_v_long +
+        flops_attn_short + flops_attn_long +
+        flops_output_proj
+    )
+
+    return total_flops
 
 
 
@@ -108,18 +107,6 @@ def forward(self, x, force_no_flash=False):
 
 #     return total_flops
 
-
-def profile_fvcore_flops(model, sequence_length, vocab_size, device):
-    dummy_input = torch.randint(0, vocab_size, (1, sequence_length)).to(device)
-
-    flop_analyzer = FlopCountAnalysis(model, (dummy_input,))
-    flop_analyzer.set_op_handle(CausalSelfAttention, attention_flop_counter)
-
-    total_flops = flop_analyzer.total()
-    print("[FvCore Profiling] Total FLOPs (per forward pass): {:,}".format(total_flops))
-    print(flop_count_table(flop_analyzer))
-
-    return total_flops
 
 
 
@@ -173,10 +160,43 @@ class CausalSelfAttention(nn.Module):
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
             # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
             return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
-    def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+    # def forward(self, x):
+    #     B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        device = x.device
+    #     device = x.device
+
+    #     y_short = None
+    #     if self.n_heads_short > 0:
+    #         qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
+    #         q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
+    #         v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
+    #         mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+    #         y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
+
+    #     y_long = None
+    #     if self.n_heads_long > 0:
+    #         qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
+    #         q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
+    #         v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
+    #         mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+    #         y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
+
+    #     # Combine the outputs from the two groups (concatenating along the head dimension)
+    #     if y_short is not None and y_long is not None:
+    #         y = torch.cat([y_short, y_long], dim=1)
+    #     elif y_short is not None:
+    #         y = y_short
+    #     elif y_long is not None:
+    #         y = y_long
+
+    #     y = y.transpose(1, 2).contiguous().view(B, T, C)
+    #     y = self.resid_dropout(self.c_proj(y))
+    #     return y
+    def forward(self, x, force_no_flash=False):
+        B, T, C = x.size()
+
+        # For flop profiling, we force flash attention off
+        flash_enabled = self.flash and not force_no_flash
 
         y_short = None
         if self.n_heads_short > 0:
@@ -184,17 +204,40 @@ class CausalSelfAttention(nn.Module):
             q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
             v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
-            y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
 
+            if flash_enabled:
+                y_short = F.scaled_dot_product_attention(
+                    q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None
+                )
+            else:
+                # Non-flash attention path for profiling purposes
+                attn_weights = (q_short @ k_short.transpose(-2, -1)) / (self.short_heads_dim ** 0.5)
+                if mask_short is not None:
+                    attn_weights = attn_weights + mask_short.unsqueeze(0).unsqueeze(0)
+                attn_weights = F.softmax(attn_weights, dim=-1)
+                attn_weights = self.attn_dropout(attn_weights)
+                y_short = attn_weights @ v_short
+
+        # Same for long heads...
         y_long = None
         if self.n_heads_long > 0:
             qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
             q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
             v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
             mask_long = self.mask_long[:T, :T] if self.context_long < T else None
-            y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
 
-        # Combine the outputs from the two groups (concatenating along the head dimension)
+            if flash_enabled:
+                y_long = F.scaled_dot_product_attention(
+                    q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None
+                )
+            else:
+                attn_weights = (q_long @ k_long.transpose(-2, -1)) / (self.long_heads_dim ** 0.5)
+                if mask_long is not None:
+                    attn_weights = attn_weights + mask_long.unsqueeze(0).unsqueeze(0)
+                attn_weights = F.softmax(attn_weights, dim=-1)
+                attn_weights = self.attn_dropout(attn_weights)
+                y_long = attn_weights @ v_long
+
         if y_short is not None and y_long is not None:
             y = torch.cat([y_short, y_long], dim=1)
         elif y_short is not None:
