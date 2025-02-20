@@ -21,6 +21,9 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     dummy_input = torch.randint(0, vocab_size, (1, sequence_length), device=device)
     dummy_target = torch.zeros_like(dummy_input)
 
+    def forward_with_no_flash_attention(x, y):
+        return model(x, y, force_no_flash=True)
+
     flop_analyzer = FlopCountAnalysis(
         model, (dummy_input, dummy_target)
     )
@@ -31,6 +34,7 @@ def profile_fvcore_flops(model, sequence_length, vocab_size, device):
     print(flop_count_table(flop_analyzer))
 
     return total_flops
+
 
 
 
