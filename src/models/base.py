@@ -23,62 +23,95 @@ from .tools import LayerNorm
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
-def attention_flop_counter(module, inputs, outputs):
-    print(f"Computing FLOPs for: {module}")
+def analytical_flop_counter(model, batch_size, sequence_length):
+    """
+    Analytically estimate FLOPs per forward pass based on the model config.
+    Includes attention (with different head dims/context), MLP, and projections.
 
-    B, T, C = inputs[0].shape
-    n_heads_short = module.n_heads_short
-    n_heads_long = module.n_heads_long
-    short_dim = module.short_heads_dim
-    long_dim = module.long_heads_dim
-    head_dim = module.head_dim
-    context_window_short = min(T, module.context_short)
-    context_window_long = min(T, module.context_long)
+    :param model: GPTBase model (or DDP-wrapped)
+    :param batch_size: int
+    :param sequence_length: int
+    :return: total_flops (int)
+    """
+    # Unwrap DDP if needed
+    raw_model = model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model
+    config = raw_model.config
 
-    # Projection FLOPs for Q, K, V
-    flops_qk_short = B * T * C * (2 * n_heads_short * short_dim) if n_heads_short > 0 else 0
-    flops_v_short = B * T * C * (n_heads_short * head_dim) if n_heads_short > 0 else 0
+    n_embd = config.n_embd
+    n_layer = config.n_layer
+    n_heads_short = config.n_heads_short
+    n_heads_long = config.n_heads_long
+    short_heads_dim = config.short_heads_dim
+    long_heads_dim = config.long_heads_dim
+    head_dim = n_embd // config.n_head  # Standard head dim for V and final concat
 
-    flops_qk_long = B * T * C * (2 * n_heads_long * long_dim) if n_heads_long > 0 else 0
-    flops_v_long = B * T * C * (n_heads_long * head_dim) if n_heads_long > 0 else 0
+    context_short = config.context_short or sequence_length
+    context_long = config.context_long or sequence_length
 
-    # Count non-zero elements for more accurate QK^T and softmax/V-weighting FLOPs
-    def compute_non_zero_elements(T, window_size):
-        if window_size >= T:
-            # Full causal mask (lower triangular), T*(T+1)/2 non-zeros
-            return T * (T + 1) // 2
-        else:
-            # Windowed attention mask with causal constraint
-            # Each row i attends to min(i + 1, window_size) elements
-            return sum(min(i + 1, window_size) for i in range(T))
+    B, T, C = batch_size, sequence_length, n_embd
 
-    non_zero_short = compute_non_zero_elements(T, context_window_short) if n_heads_short > 0 else 0
-    non_zero_long = compute_non_zero_elements(T, context_window_long) if n_heads_long > 0 else 0
+    def compute_attention_flops(n_heads, qk_dim, window_size):
+        if n_heads == 0:
+            return 0
+        # Projection FLOPs: Q, K, V projections (Q, K have qk_dim, V has head_dim)
+        flops_qk_proj = B * T * C * (2 * n_heads * qk_dim)
+        flops_v_proj = B * T * C * (n_heads * head_dim)
 
-    # QK^T computation + softmax + weighted sum with V (attention application)
-    flops_attn_short = B * n_heads_short * (
-        non_zero_short * short_dim +  # QK^T
-        non_zero_short +              # Softmax
-        non_zero_short * head_dim     # Weighted sum with V
-    ) if n_heads_short > 0 else 0
+        # Attention computation FLOPs
+        # Each row attends to at most `window_size` tokens
+        def compute_non_zero_elements(T, window_size):
+            if window_size >= T:
+                return T * (T + 1) // 2  # Full causal mask
+            else:
+                # Each position attends to min(i + 1, window_size) elements
+                return sum(min(i + 1, window_size) for i in range(T))
 
-    flops_attn_long = B * n_heads_long * (
-        non_zero_long * long_dim +
-        non_zero_long +
-        non_zero_long * head_dim
-    ) if n_heads_long > 0 else 0
+        non_zero_elements = compute_non_zero_elements(T, window_size)
 
-    # Output projection
-    flops_output_proj = B * T * C * C
+        flops_qk_matmul = B * n_heads * non_zero_elements * qk_dim  # Q @ K^T
+        flops_softmax = B * n_heads * non_zero_elements  # Softmax is relatively cheap
+        flops_v_weighted_sum = B * n_heads * non_zero_elements * head_dim  # Weighted sum (Attention output)
 
-    total_flops = (
-        flops_qk_short + flops_v_short +
-        flops_qk_long + flops_v_long +
-        flops_attn_short + flops_attn_long +
-        flops_output_proj
-    )
+        # Output projection FLOPs (after concatenation of heads)
+        # This is only done once per block, so we add it later after merging heads
+        flops_output_proj = 0  # Will handle this outside
 
+        attention_flops = flops_qk_proj + flops_v_proj + flops_qk_matmul + flops_softmax + flops_v_weighted_sum + flops_output_proj
+        return attention_flops
+
+    def compute_mlp_flops():
+        # MLP: FC1 -> Activation -> FC2
+        flops_fc1 = B * T * C * (4 * C)
+        flops_fc2 = B * T * (4 * C) * C
+        return flops_fc1 + flops_fc2
+
+    # FLOP count for each layer
+    total_flops_per_layer = 0
+    for _ in range(n_layer):
+        # Short attention heads
+        flops_short = compute_attention_flops(n_heads_short, short_heads_dim, context_short)
+        # Long attention heads
+        flops_long = compute_attention_flops(n_heads_long, long_heads_dim, context_long)
+
+        # Output projection once per block (after concatenation of heads)
+        flops_output_proj = B * T * C * C
+
+        # MLP FLOPs
+        flops_mlp = compute_mlp_flops()
+
+        total_flops_per_layer += flops_short + flops_long + flops_output_proj + flops_mlp
+
+    # Embedding layer (lookup, not matmul, so FLOPs often ignored in papers)
+    flops_embedding = 0
+
+    # Final LayerNorm
+    flops_ln_final = B * T * C * 2  # Normalization involves mean/variance + scale/shift
+
+    total_flops = n_layer * total_flops_per_layer + flops_embedding + flops_ln_final
+
+    print(f"[Analytical Profiling] Estimated FLOPs per forward pass: {total_flops:,}")
     return total_flops
+
 
 
 
