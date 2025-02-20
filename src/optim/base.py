@@ -63,10 +63,10 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
     if itr == 0 and distributed_backend.is_master_process():
         # Analytical FLOP estimation
-        total_flops = analytical_flop_counter(model, batch_size=batch_size, sequence_length=sequence_length)
+        total_flops = analytical_flop_counter(model, batch_size=1, sequence_length=sequence_length)
 
         if extra_args.wandb:
-            wandb.log({"model/analytical_flops": total_flops})
+            wandb.log({"model/analytical_flops_per_sequence": total_flops})
 
 
 
