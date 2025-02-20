@@ -50,34 +50,24 @@ def analytical_flop_counter(model, batch_size, sequence_length):
 
     B, T, C = batch_size, sequence_length, n_embd
 
-    def compute_attention_flops(n_heads, qk_dim, window_size):
+    def compute_attention_flops(n_heads, qk_dim, v_dim, window_size):
         if n_heads == 0:
             return 0
-        # Projection FLOPs: Q, K, V projections (Q, K have qk_dim, V has head_dim)
-        flops_qk_proj = B * T * C * (2 * n_heads * qk_dim)
-        flops_v_proj = B * T * C * (n_heads * head_dim)
+        # Projection FLOPs: Q, K, V projections
+        flops_q_proj = B * T * C * n_heads * qk_dim  # Q projection
+        flops_k_proj = B * T * C * n_heads * qk_dim  # K projection
+        flops_v_proj = B * T * C * n_heads * v_dim   # V projection
 
         # Attention computation FLOPs
-        # Each row attends to at most `window_size` tokens
-        def compute_non_zero_elements(T, window_size):
-            if window_size >= T:
-                return T * (T + 1) // 2  # Full causal mask
-            else:
-                # Each position attends to min(i + 1, window_size) elements
-                return sum(min(i + 1, window_size) for i in range(T))
+        non_zero_elements = sum(min(i + 1, window_size) for i in range(T))
 
-        non_zero_elements = compute_non_zero_elements(T, window_size)
+        # Q @ K^T and attention weighting
+        flops_qk_matmul = B * n_heads * non_zero_elements * qk_dim
+        flops_softmax = B * n_heads * non_zero_elements
+        flops_v_weighted_sum = B * n_heads * non_zero_elements * v_dim
 
-        flops_qk_matmul = B * n_heads * non_zero_elements * qk_dim  # Q @ K^T
-        flops_softmax = B * n_heads * non_zero_elements  # Softmax is relatively cheap
-        flops_v_weighted_sum = B * n_heads * non_zero_elements * head_dim  # Weighted sum (Attention output)
+        return flops_q_proj + flops_k_proj + flops_v_proj + flops_qk_matmul + flops_softmax + flops_v_weighted_sum
 
-        # Output projection FLOPs (after concatenation of heads)
-        # This is only done once per block, so we add it later after merging heads
-        flops_output_proj = 0  # Will handle this outside
-
-        attention_flops = flops_qk_proj + flops_v_proj + flops_qk_matmul + flops_softmax + flops_v_weighted_sum + flops_output_proj
-        return attention_flops
 
     def compute_mlp_flops():
         # MLP: FC1 -> Activation -> FC2
