@@ -23,7 +23,7 @@ from .tools import LayerNorm
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
-def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements):
+def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
     if n_heads == 0:
         return 0
 
@@ -69,8 +69,8 @@ def analytical_flop_counter(model, batch_size, sequence_length):
         flops_v_long_proj = B * T * C * n_heads_long * head_dim
 
         # Attention FLOPs
-        flops_attn_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, non_zero_short)
-        flops_attn_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, non_zero_long)
+        flops_attn_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, non_zero_short, B)
+        flops_attn_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, non_zero_long, B)
 
         # Output Projection
         flops_output_proj = B * T * C * C
