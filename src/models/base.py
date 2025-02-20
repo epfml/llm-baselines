@@ -24,6 +24,8 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
 def attention_flop_counter(module, inputs, outputs):
+    print(f"Computing FLOPs for: {module}")
+
     B, T, C = inputs[0].shape
     n_heads_short = module.n_heads_short
     n_heads_long = module.n_heads_long
