@@ -82,30 +82,6 @@ def attention_flop_counter(module, inputs, outputs):
 
 
 
-# def attention_flop_counter(module, inputs, outputs):
-#     B, T, C = inputs[0].shape
-#     n_full_heads = module.n_full_heads
-#     n_long_heads = module.n_long_heads
-#     head_dim = module.head_dim
-#     long_dim = module.long_dim
-
-#     flops_qkv_full = B * T * C * (3 * n_full_heads * head_dim) if n_full_heads > 0 else 0
-#     flops_qkv_long = B * T * C * (2 * n_long_heads * long_dim + n_long_heads * head_dim) if n_long_heads > 0 else 0
-
-#     flops_attn_full = B * n_full_heads * T * (T * head_dim + T + T * head_dim) * 2 if n_full_heads > 0 else 0
-#     flops_attn_long = B * n_long_heads * T * (T * long_dim + T + T * head_dim) * 2 if n_long_heads > 0 else 0
-
-#     flops_output_proj = B * T * C * C
-
-#     total_flops = (
-#         flops_qkv_full
-#         + flops_qkv_long
-#         + flops_attn_full
-#         + flops_attn_long
-#         + flops_output_proj
-#     )
-
-#     return total_flops
 
 
 
@@ -160,43 +136,10 @@ class CausalSelfAttention(nn.Module):
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
             # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
             return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
-    # def forward(self, x):
-    #     B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-    #     device = x.device
-
-    #     y_short = None
-    #     if self.n_heads_short > 0:
-    #         qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
-    #         q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
-    #         v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
-    #         mask_short = self.mask_short[:T, :T] if self.context_short < T else None
-    #         y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
-
-    #     y_long = None
-    #     if self.n_heads_long > 0:
-    #         qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
-    #         q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
-    #         v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
-    #         mask_long = self.mask_long[:T, :T] if self.context_long < T else None
-    #         y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
-
-    #     # Combine the outputs from the two groups (concatenating along the head dimension)
-    #     if y_short is not None and y_long is not None:
-    #         y = torch.cat([y_short, y_long], dim=1)
-    #     elif y_short is not None:
-    #         y = y_short
-    #     elif y_long is not None:
-    #         y = y_long
-
-    #     y = y.transpose(1, 2).contiguous().view(B, T, C)
-    #     y = self.resid_dropout(self.c_proj(y))
-    #     return y
-    def forward(self, x, force_no_flash=False):
-        B, T, C = x.size()
-
-        # For flop profiling, we force flash attention off
-        flash_enabled = self.flash and not force_no_flash
+        device = x.device
 
         y_short = None
         if self.n_heads_short > 0:
@@ -204,40 +147,17 @@ class CausalSelfAttention(nn.Module):
             q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
             v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+            y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
 
-            if flash_enabled:
-                y_short = F.scaled_dot_product_attention(
-                    q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None
-                )
-            else:
-                # Non-flash attention path for profiling purposes
-                attn_weights = (q_short @ k_short.transpose(-2, -1)) / (self.short_heads_dim ** 0.5)
-                if mask_short is not None:
-                    attn_weights = attn_weights + mask_short.unsqueeze(0).unsqueeze(0)
-                attn_weights = F.softmax(attn_weights, dim=-1)
-                attn_weights = self.attn_dropout(attn_weights)
-                y_short = attn_weights @ v_short
-
-        # Same for long heads...
         y_long = None
         if self.n_heads_long > 0:
             qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
             q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
             v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
             mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+            y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
 
-            if flash_enabled:
-                y_long = F.scaled_dot_product_attention(
-                    q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None
-                )
-            else:
-                attn_weights = (q_long @ k_long.transpose(-2, -1)) / (self.long_heads_dim ** 0.5)
-                if mask_long is not None:
-                    attn_weights = attn_weights + mask_long.unsqueeze(0).unsqueeze(0)
-                attn_weights = F.softmax(attn_weights, dim=-1)
-                attn_weights = self.attn_dropout(attn_weights)
-                y_long = attn_weights @ v_long
-
+        # Combine the outputs from the two groups (concatenating along the head dimension)
         if y_short is not None and y_long is not None:
             y = torch.cat([y_short, y_long], dim=1)
         elif y_short is not None:
@@ -278,8 +198,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x, **kwargs):
-        x_attn = self.attn_block(self.ln_1(x),**kwargs)
+    def forward(self, x):
+        x_attn = self.attn_block(self.ln_1(x))
         x = x + x_attn
         x = x + self.mlp(self.ln_2(x))
         return x
@@ -385,7 +305,7 @@ class GPTBase(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
 
-    def forward(self, idx, targets=None, get_logits=False, force_no_flash=False):
+    def forward(self, idx, targets=None, get_logits=False):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.sequence_length, f"Cannot forward sequence of length {t}, block size is only {self.config.sequence_length}"
@@ -397,7 +317,7 @@ class GPTBase(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             if self.config.attention_type == "base":
-                x = block(x, force_no_flash=force_no_flash)
+                x = block(x)
             else:
                 mask = causal_mask(x)
                 x = block(x, mask=mask)
