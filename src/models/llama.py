@@ -35,6 +35,7 @@ def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Te
     freqs_cis: complex - (seq_len, head_dim / 2)
     x: complex - (bsz, seq_len, head_dim / 2)
     """
+    print(f"DEBUG: freqs_cis.shape: {freqs_cis.shape}, x.shape: {x.shape}")
     ndim = x.ndim
     assert 1 < ndim
     assert freqs_cis.shape == (x.shape[1], x.shape[-1]), (
@@ -99,6 +100,8 @@ class LlamaAttention(CausalSelfAttention):
         ) = x.size()
 
         y_short, y_long = None, None
+        print(f"DEBUG: x.shape={x.shape}, freqs_cis_long.shape={freqs_cis_long.shape}, freqs_cis_short.shape={freqs_cis_short.shape}")
+
         if self.n_heads_short > 0:
             # Compute q, k, v for short heads
             qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
