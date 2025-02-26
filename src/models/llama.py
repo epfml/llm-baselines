@@ -90,7 +90,7 @@ class LlamaMLP(nn.Module):
 
 
 class LlamaAttention(CausalSelfAttention):
-    def forward(self, x, freqs_cis):
+    def forward(self, x, freqs_cis_short, freqs_cis_long):
         # batch size, sequence length, embedding dimensionality (n_embd)
         (
             B,
@@ -98,38 +98,89 @@ class LlamaAttention(CausalSelfAttention):
             C,
         ) = x.size()
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        # (B, T, nh, hs)
-        k = k.view(B, T, self.n_head, C // self.n_head)
-        q = q.view(B, T, self.n_head, C // self.n_head)
-        q, k = apply_rotary_emb(q, k, freqs_cis)
-        # (B, nh, T, hs)
-        q, k = q.transpose(1, 2), k.transpose(1, 2)
+        y_short, y_long = None, None
+        if self.n_heads_short > 0:
+            # Compute q, k, v for short heads
+            qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
+            q_short, k_short = [
+                t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short
+            ]
+            v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
 
-        # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+            # Apply RoPE to short heads
+            q_short, k_short = apply_rotary_emb(q_short, k_short, freqs_cis_short)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+            # Short-range attention
+            mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+            y_short = F.scaled_dot_product_attention(
+                q_short, k_short, v_short, attn_mask=mask_short,
+                dropout_p=self.attn_dropout.p, is_causal=mask_short is None
             )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
-        )  # re-assemble all head outputs side by side
 
-        # output projection
+        if self.n_heads_long > 0:
+            # Compute q, k, v for long heads
+            qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
+            q_long, k_long = [
+                t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long
+            ]
+            v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
+
+            # Apply RoPE to long heads (NEW)
+            q_long, k_long = apply_rotary_emb(q_long, k_long, freqs_cis_long)
+
+            # Long-range attention
+            mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+            y_long = F.scaled_dot_product_attention(
+                q_long, k_long, v_long, attn_mask=mask_long,
+                dropout_p=self.attn_dropout.p, is_causal=mask_long is None
+            )
+
+        # Merge outputs from both attentions
+        if y_short is not None and y_long is not None:
+            y = torch.cat([y_short, y_long], dim=1)
+        elif y_short is not None:
+            y = y_short
+        elif y_long is not None:
+            y = y_long
+        else:
+            raise ValueError("Both short and long heads are disabled!")
+
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_dropout(self.c_proj(y))
         return y
+
+        # # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        # # (B, T, nh, hs)
+        # k = k.view(B, T, self.n_head, C // self.n_head)
+        # q = q.view(B, T, self.n_head, C // self.n_head)
+        # q, k = apply_rotary_emb(q, k, freqs_cis)
+        # # (B, nh, T, hs)
+        # q, k = q.transpose(1, 2), k.transpose(1, 2)
+
+        # # (B, nh, T, hs)
+        # v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+
+        # # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # if self.flash:
+        #     # efficient attention using Flash Attention CUDA kernels
+        #     y = torch.nn.functional.scaled_dot_product_attention(
+        #         q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+        #     )
+        # else:
+        #     # manual implementation of attention
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # y = (
+        #     y.transpose(1, 2).contiguous().view(B, T, C)
+        # )  # re-assemble all head outputs side by side
+
+        # # output projection
+        # y = self.resid_dropout(self.c_proj(y))
+        # return y
 
 
 class LlamaBlock(nn.Module):
@@ -140,8 +191,8 @@ class LlamaBlock(nn.Module):
         self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.mlp = LlamaMLP(config)
 
-    def forward(self, x, freqs_cis):
-        x = x + self.attn(self.ln_1(x), freqs_cis)
+    def forward(self, x, freqs_cis_short, freqs_cis_long):
+        x = x + self.attn(self.ln_1(x), freqs_cis_short, freqs_cis_long)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -156,7 +207,10 @@ class Llama(GPTBase):
 
         # create the token and position embeddings
         self.head_dim = config.n_embd // config.n_head
-        self.freqs_cis = precompute_freqs_cis(self.head_dim, config.sequence_length)
+        # self.freqs_cis = precompute_freqs_cis(self.head_dim, config.sequence_length)
+
+        self.freqs_cis_short = precompute_freqs_cis(config.short_heads_dim, config.sequence_length).to(config.device)
+        self.freqs_cis_long = precompute_freqs_cis(config.long_heads_dim, config.sequence_length).to(config.device)
 
         self.transformer = nn.ModuleDict(
             dict(
@@ -209,10 +263,12 @@ class Llama(GPTBase):
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
 
         x = self.transformer.drop(tok_emb)
-        freqs_cis = self.freqs_cis.to(x.device)[pos]
+        # freqs_cis = self.freqs_cis.to(x.device)[pos]
+        freqs_cis_short = self.freqs_cis_short[:t]
+        freqs_cis_long = self.freqs_cis_long[:t]
 
         for block_idx, block in enumerate(self.transformer.h):
-            x = block(x, freqs_cis=freqs_cis)
+            x = block(x, freqs_cis_short=freqs_cis_short, freqs_cis_long=freqs_cis_long)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
