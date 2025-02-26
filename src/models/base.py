@@ -34,9 +34,6 @@ def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
     return flops_qk_matmul + flops_softmax + flops_v_weighted_sum
 
 def analytical_flop_counter(model, batch_size, sequence_length, model_type="base"):
-    """
-    Computes the estimated FLOPs for a given model type ('base' for GPT-style, 'llama2' for LLaMA-style).
-    """
     raw_model = model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model
     config = raw_model.config
 
@@ -58,22 +55,20 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
 
     def compute_mlp_flops():
         if model_type == "base":
-            # Standard GPT-style MLP (4x expansion)
             return B * T * C * (4 * C) + B * T * (4 * C) * C
         elif model_type == "llama2":
-            # LLaMA2-style MLP with SwiGLU:
-            hidden_dim = int((2 * 4 * C) / 3)  # SwiGLU uses a smaller hidden dim
+            hidden_dim = int((2 * 4 * C) / 3)
             hidden_dim = config.multiple_of * ((hidden_dim + config.multiple_of - 1) // config.multiple_of)
-            return B * T * C * hidden_dim + B * T * hidden_dim + B * T * hidden_dim * C  # SwiGLU + Linear
+            return B * T * C * hidden_dim + B * T * hidden_dim + B * T * hidden_dim * C  
 
-    total_flops_per_layer = 0
-    attn_flops_per_layer = 0
+    total_attn_flops = 0
+    total_mlp_flops = 0
+    total_output_proj_flops = 0
 
     for _ in range(n_layer):
-        # Projection FLOPs (Q, K, V projections)
+        # Projection FLOPs (Q, K, V)
         flops_qk_short_proj = B * T * C * 2 * n_heads_short * short_heads_dim
         flops_v_short_proj = B * T * C * n_heads_short * head_dim
-
         flops_qk_long_proj = B * T * C * 2 * n_heads_long * long_heads_dim
         flops_v_long_proj = B * T * C * n_heads_long * head_dim
 
@@ -81,38 +76,35 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
         flops_attn_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, non_zero_short, B)
         flops_attn_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, non_zero_long, B)
 
-        # Output Projection (final attention projection)
+        # Output Projection FLOPs
         flops_output_proj = B * T * C * C
 
         # MLP FLOPs
         flops_mlp = compute_mlp_flops()
 
-        # Accumulate attention-specific FLOPs
-        attn_flops_per_layer += (
+        # Accumulate per-layer FLOPs
+        attn_flops_layer = (
             flops_qk_short_proj + flops_v_short_proj +
             flops_qk_long_proj + flops_v_long_proj +
-            flops_attn_short + flops_attn_long 
+            flops_attn_short + flops_attn_long +
+            flops_output_proj
         )
-
-        # Total FLOPs per layer (including MLP)
-        total_flops_per_layer += attn_flops_per_layer + flops_mlp + flops_output_proj
-
-    # Embedding Layer FLOPs (negligible)
-    flops_embedding = 0
+        
+        total_attn_flops += attn_flops_layer
+        total_mlp_flops += flops_mlp
+        total_output_proj_flops += flops_output_proj
 
     # Final Normalization FLOPs
-    if model_type == "base":
-        flops_norm = B * T * C * 2  # LayerNorm
-    elif model_type == "llama2":
-        flops_norm = B * T * C  # RMSNorm is slightly cheaper
+    flops_norm = B * T * C * (2 if model_type == "base" else 1)  
 
-    total_flops = total_flops_per_layer + flops_embedding + flops_norm
-    attn_flops = attn_flops_per_layer 
+    # Compute Total FLOPs
+    total_flops = total_attn_flops + total_mlp_flops + total_output_proj_flops + flops_norm
 
-    print(f"[Analytical Profiling] Estimated Attention FLOPs per forward pass: {attn_flops:,}")
+    print(f"[Analytical Profiling] Estimated Attention FLOPs per forward pass: {total_attn_flops:,}")
+    print(f"[Analytical Profiling] Estimated MLP FLOPs per forward pass: {total_mlp_flops:,}")
     print(f"[Analytical Profiling] Estimated Total FLOPs per forward pass: {total_flops:,}")
 
-    return attn_flops, total_flops
+    return total_attn_flops, total_flops
 
 
 
