@@ -105,13 +105,15 @@ class LlamaAttention(CausalSelfAttention):
         if self.n_heads_short > 0:
             # Compute q, k, v for short heads
             qk_short = self.qk_short(x).split(self.n_heads_short * self.short_heads_dim, dim=2)
-            q_short, k_short = [
-                t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short
-            ]
-            v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
+            q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim) for t in qk_short]  # NO transpose yet!
+            v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim)
 
-            # Apply RoPE to short heads
+            # Apply RoPE before transposing
             q_short, k_short = apply_rotary_emb(q_short, k_short, freqs_cis_short)
+
+            # NOW transpose to [B, num_heads, T, head_dim]
+            q_short, k_short = q_short.transpose(1, 2), k_short.transpose(1, 2)
+            v_short = v_short.transpose(1, 2)
 
             # Short-range attention
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
@@ -123,13 +125,15 @@ class LlamaAttention(CausalSelfAttention):
         if self.n_heads_long > 0:
             # Compute q, k, v for long heads
             qk_long = self.qk_long(x).split(self.n_heads_long * self.long_heads_dim, dim=2)
-            q_long, k_long = [
-                t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long
-            ]
-            v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
+            q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim) for t in qk_long]  # NO transpose yet!
+            v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim)
 
-            # Apply RoPE to long heads (NEW)
+            # Apply RoPE before transposing
             q_long, k_long = apply_rotary_emb(q_long, k_long, freqs_cis_long)
+
+            # NOW transpose to [B, num_heads, T, head_dim]
+            q_long, k_long = q_long.transpose(1, 2), k_long.transpose(1, 2)
+            v_long = v_long.transpose(1, 2)
 
             # Long-range attention
             mask_long = self.mask_long[:T, :T] if self.context_long < T else None
@@ -137,6 +141,7 @@ class LlamaAttention(CausalSelfAttention):
                 q_long, k_long, v_long, attn_mask=mask_long,
                 dropout_p=self.attn_dropout.p, is_causal=mask_long is None
             )
+
 
         # Merge outputs from both attentions
         if y_short is not None and y_long is not None:
