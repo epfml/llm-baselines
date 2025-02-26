@@ -107,7 +107,7 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
         flops_norm = B * T * C  # RMSNorm is slightly cheaper
 
     total_flops = total_flops_per_layer + flops_embedding + flops_norm
-    attn_flops = attn_flops_per_layer * n_layer  # Since per-layer FLOPs were computed
+    attn_flops = attn_flops_per_layer 
 
     print(f"[Analytical Profiling] Estimated Attention FLOPs per forward pass: {attn_flops:,}")
     print(f"[Analytical Profiling] Estimated Total FLOPs per forward pass: {total_flops:,}")
