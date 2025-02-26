@@ -20,7 +20,6 @@ from .randatt.tools import causal_mask, alibi_shift
 
 from .tools import LayerNorm
 
-from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 
 def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
