@@ -209,8 +209,8 @@ class Llama(GPTBase):
         self.head_dim = config.n_embd // config.n_head
         # self.freqs_cis = precompute_freqs_cis(self.head_dim, config.sequence_length)
 
-        self.freqs_cis_short = precompute_freqs_cis(config.short_heads_dim, config.sequence_length).to(config.device)
-        self.freqs_cis_long = precompute_freqs_cis(config.long_heads_dim, config.sequence_length).to(config.device)
+        self.freqs_cis_short = precompute_freqs_cis(config.short_heads_dim, config.sequence_length)
+        self.freqs_cis_long = precompute_freqs_cis(config.long_heads_dim, config.sequence_length)
 
         self.transformer = nn.ModuleDict(
             dict(
@@ -264,8 +264,10 @@ class Llama(GPTBase):
 
         x = self.transformer.drop(tok_emb)
         # freqs_cis = self.freqs_cis.to(x.device)[pos]
-        freqs_cis_short = self.freqs_cis_short[:t]
-        freqs_cis_long = self.freqs_cis_long[:t]
+        # freqs_cis_short = self.freqs_cis_short[:t]
+        # freqs_cis_long = self.freqs_cis_long[:t]
+        freqs_cis_short = self.freqs_cis_short.to(x.device)[pos]
+        freqs_cis_long = self.freqs_cis_long.to(x.device)[pos]
 
         for block_idx, block in enumerate(self.transformer.h):
             x = block(x, freqs_cis_short=freqs_cis_short, freqs_cis_long=freqs_cis_long)
