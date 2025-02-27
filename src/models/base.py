@@ -31,7 +31,7 @@ def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
     flops_softmax = B * n_heads * non_zero_elements
     flops_v_weighted_sum = B * n_heads * non_zero_elements * v_dim
 
-    return flops_qk_matmul + flops_softmax + flops_v_weighted_sum
+    return flops_qk_matmul , flops_qk_matmul + flops_softmax + flops_v_weighted_sum
 
 def analytical_flop_counter(model, batch_size, sequence_length, model_type="base"):
     raw_model = model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model
@@ -64,7 +64,7 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
     total_attn_flops = 0
     total_mlp_flops = 0
     total_output_proj_flops = 0
-
+    just_ATT_matrix_Flops = 0
     for _ in range(n_layer):
         # Projection FLOPs (Q, K, V)
         flops_qk_short_proj = B * T * C * 2 * n_heads_short * short_heads_dim
@@ -73,8 +73,8 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
         flops_v_long_proj = B * T * C * n_heads_long * head_dim
 
         # Attention Computation FLOPs
-        flops_attn_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, non_zero_short, B)
-        flops_attn_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, non_zero_long, B)
+        qk_short_flops , flops_attn_short = compute_attention_flops(n_heads_short, short_heads_dim, head_dim, non_zero_short, B)
+        qk_long_flops ,flops_attn_long = compute_attention_flops(n_heads_long, long_heads_dim, head_dim, non_zero_long, B)
 
         # Output Projection FLOPs
         flops_output_proj = B * T * C * C
@@ -89,6 +89,7 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
             flops_attn_short + flops_attn_long +
             flops_output_proj
         )
+        just_ATT_matrix_Flops += qk_short_flops + qk_long_flops
         
         total_attn_flops += attn_flops_layer
         total_mlp_flops += flops_mlp
@@ -103,8 +104,9 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
     print(f"[Analytical Profiling] Estimated Attention FLOPs per forward pass: {total_attn_flops:,}")
     print(f"[Analytical Profiling] Estimated MLP FLOPs per forward pass: {total_mlp_flops:,}")
     print(f"[Analytical Profiling] Estimated Total FLOPs per forward pass: {total_flops:,}")
+    print(f"[Analytical Profiling] Estimated QK FLOPs per forward pass: {just_ATT_matrix_Flops:,}")
 
-    return total_attn_flops, total_flops
+    return total_attn_flops, total_flops , just_ATT_matrix_Flops
 
 
 

@@ -66,14 +66,15 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         model_type = extra_args.model  # "base" or "llama2"
         
         # Analytical FLOP estimation
-        attn_flops, total_flops = analytical_flop_counter(
+        attn_flops, total_flops, qk_flops = analytical_flop_counter(
             model, batch_size=batch_size, sequence_length=sequence_length, model_type=model_type
         )
 
         if extra_args.wandb:
             wandb.log({
                 "model/analytical_attention_flops_per_sequence": attn_flops,
-                "model/analytical_total_flops_per_sequence": total_flops
+                "model/analytical_total_flops_per_sequence": total_flops,
+                "model/analytical_qk_flops_per_sequence": qk_flops
             })
 
 
