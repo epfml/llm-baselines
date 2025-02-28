@@ -24,7 +24,7 @@ from .tools import LayerNorm
 
 def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
     if n_heads == 0:
-        return 0
+        return 0, 0
 
     # Attention FLOPs
     flops_qk_matmul = B * n_heads * non_zero_elements * qk_dim
