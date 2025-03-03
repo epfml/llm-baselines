@@ -22,7 +22,7 @@ from .tools import LayerNorm
 
 
 
-def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B):
+def compute_attention_flops(n_heads, qk_dim, v_dim, non_zero_elements, B ):
     if n_heads == 0:
         return 0, 0
 
@@ -49,6 +49,7 @@ def analytical_flop_counter(model, batch_size, sequence_length, model_type="base
     context_long = config.context_long or sequence_length
 
     B, T, C = batch_size, sequence_length, n_embd
+    B = 1
 
     non_zero_short = sum(min(i + 1, context_short) for i in range(T))
     non_zero_long = sum(min(i + 1, context_long) for i in range(T))
