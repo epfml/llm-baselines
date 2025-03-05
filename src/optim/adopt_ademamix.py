@@ -83,7 +83,8 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
         for group in self.param_groups:
             params_with_grad = []
             grads = []
-            exp_avgs = []
+            exp_avgs_fast = []
+            exp_avgs_slow = []
             exp_avg_sqs = []
             state_steps = []
             beta1, beta2, beta3_final = group["betas"]
@@ -171,7 +172,9 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
                     normed_grad.clamp_(-clip, clip)
 
                 if beta1 != 0:
+                    bias_correction = 1 - beta1 ** step
                     exp_avg_fast.lerp_(normed_grad, 1 - beta1)
+                    exp_avg_fast.div(bias_correction)
                 else:
                     exp_avg_fast = normed_grad
                 exp_avg_slow.lerp_(normed_grad, 1 - beta3)

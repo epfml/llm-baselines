@@ -182,40 +182,40 @@ def main(args, parser):
                 correct_bias=args.correct_bias,
             )
     elif args.opt == "muon":
-        param_list = (
-            list(model.parameters())
-            if args.distributed_backend is None
-            else list(model.module.parameters())
-        )
-        assert (
-            sum(p.numel() for p in param_list) == params_cnt
-        ), "number of parameters must be the same"
+        param_list = group_specs#  (
+        #     list(model.parameters())
+        #     if args.distributed_backend is None
+        #     else list(model.module.parameters())
+        # )
+        # assert (
+        #     sum(p.numel() for p in param_list) == params_cnt
+        # ), "number of parameters must be the same"
         if args.cautious:
-            opt = CautiousMuon(
-                muon_params=param_list,
-                lr=args.muon_lr_factor,
-                momentum=args.momentum,
-                nesterov=args.nesterov,
-                ns_steps=args.muon_ns_steps,
-                adamw_params=None,
-                adamw_lr=args.lr,
-                adamw_betas=(args.beta1, args.beta2),
-                adamw_eps=1e-8,
-                adamw_wd=args.weight_decay,
-            )
+            raise NotImplementedError(f"Since merging with the distributed muon implementation, CautiousMuon need to be re-implemented.")
+            # opt = CautiousMuon(
+            #     muon_params=param_list,
+            #     lr=args.muon_lr_factor,
+            #     momentum=args.momentum,
+            #     nesterov=args.nesterov,
+            #     ns_steps=args.muon_ns_steps,
+            #     adamw_params=None,
+            #     adamw_lr=args.lr,
+            #     adamw_betas=(args.beta1, args.beta2),
+            #     adamw_eps=1e-8,
+            #     adamw_wd=args.weight_decay,
+            # )
         else:
             opt = Muon(
-                muon_params=param_list,
-                lr=args.muon_lr_factor,
+                param_list,
+                lr=args.lr,
                 momentum=args.momentum,
                 nesterov=args.nesterov,
                 ns_steps=args.muon_ns_steps,
-                adamw_params=None,
-                adamw_lr=args.lr,
                 adamw_betas=(args.beta1, args.beta2),
                 adamw_eps=1e-8,
-                adamw_wd=args.weight_decay,
+                weight_decay=args.weight_decay,
             )
+
     elif args.opt == "ademamix":
         if args.cautious:
             opt = CautiousAdEMAMix(
@@ -554,8 +554,8 @@ def main(args, parser):
                     div_factor=1e2,
                     final_div_factor=args.final_div_factor,
                 )
-                if args.opt != "muon"
-                else CombinedScheduler(opt, args)
+                # if args.opt != "muon"
+                # else CombinedScheduler(opt, args)
             )
         elif args.scheduler == "cos_inf":
             lambda_schedule = cos_inf_schedule(
@@ -567,8 +567,8 @@ def main(args, parser):
             )
             scheduler = (
                 torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
-                if args.opt != "muon"
-                else CombinedScheduler(opt, args)
+                # if args.opt != "muon"
+                # else CombinedScheduler(opt, args)
             )
         elif args.scheduler == "wsd":
             lambda_schedule = wsd_schedule(
@@ -581,8 +581,8 @@ def main(args, parser):
             )
             scheduler = (
                 torch.optim.lr_scheduler.LambdaLR(opt, lambda_schedule)
-                if args.opt != "muon"
-                else CombinedScheduler(opt, args)
+                # if args.opt != "muon"
+                # else CombinedScheduler(opt, args)
             )
         elif args.scheduler == "cos_wsd":
             lambda_schedule = cosine_wsd_decay_schedule(
@@ -695,6 +695,10 @@ def get_exp_name(
         "wandb_run_prefix",
         "proj_embeds",
         "proj_norms",
+        "seed",
+        "device",
+        "adema_beta3_warmup",
+        "adema_alpha_warmup"
     ],
 ):
     # Get the default values
@@ -710,7 +714,7 @@ def get_exp_name(
             prefix_parts.append(f"{key}-{value}")
 
     prefix = "_".join(prefix_parts)
-    prefix = f"{args.batch_size}x{args.acc_steps}(rank={rank})_" + prefix
+    prefix = f"{args.batch_size}x{args.acc_steps}_" + prefix # rank={rank}
 
     # Generate the rest of the string with non-default arguments
     non_default_parts = []

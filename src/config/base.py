@@ -17,7 +17,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--data_seed", default=1337, type=int)
     parser.add_argument("--eval_interval", default=200, type=int)
     parser.add_argument("--full_eval_at", nargs="+", type=int)
-    parser.add_argument("--eval_batches", default=32, type=int)
+    parser.add_argument("--eval_batches", default=64, type=int)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument(
         "--distributed_backend",
