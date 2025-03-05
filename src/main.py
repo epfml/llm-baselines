@@ -540,6 +540,17 @@ def main(args, parser):
             lr=args.lr,
             momentum=args.momentum,
         )
+    elif args.opt == "scion-light":
+        scion_param_groups = scion_partitions(group_specs, model, args)
+        scion_params_cnt = sum(
+            p.numel() for group in scion_param_groups for p in group["params"]
+        )
+        print(f"Optimized parameters: {scion_params_cnt}")
+        opt = ScionLight(
+            scion_param_groups,
+            lr=args.lr,
+            momentum=args.momentum,
+        )
     else:
         if args.cautious:
             opt = CautiousSignum(
