@@ -22,19 +22,35 @@ from optim.ademamix2 import AdEMAMix2
 from optim.adopt import ADOPT
 from optim.adopt_ademamix import ADOPTAdEMAMix
 from optim.base import train
-from optim.cautious import (CautiousAdafactor, CautiousAdamW, CautiousAdEMAMix,
-                            CautiousADOPT, CautiousLion, CautiousMuon,
-                            CautiousSignum, CautiousSOAP, CautiousSophiaG)
-from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
-                           AdamClipDelayedEta)
+from optim.cautious import (
+    CautiousAdafactor,
+    CautiousAdamW,
+    CautiousAdEMAMix,
+    CautiousADOPT,
+    CautiousLion,
+    CautiousMuon,
+    CautiousSignum,
+    CautiousSOAP,
+    CautiousSophiaG,
+)
+from optim.clipped import (
+    AdagradClip,
+    AdaGradClipDelayedEta,
+    AdamClip,
+    AdamClipDelayedEta,
+)
 from optim.lamb import Lamb
 from optim.lion import Lion
 from optim.mars import MARS
 from optim.muon import CombinedScheduler, Muon
 from optim.normalized import NormalizedSGD
 from optim.prodigy import Prodigy
-from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
-                            dd_schedule, wsd_schedule)
+from optim.schedule import (
+    cos_inf_schedule,
+    cosine_wsd_decay_schedule,
+    dd_schedule,
+    wsd_schedule,
+)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sgd_with_adam import SGDWithAdam, prepare_proj_params
 from optim.sgdf import SGDF
@@ -42,6 +58,7 @@ from optim.shampoo import DistributedShampoo
 from optim.sign import Signum
 from optim.soap import SOAP
 from optim.sophia import SophiaG
+from optim.scion import Scion, ScionLight, scion_partitions
 
 
 def get_args():
@@ -511,6 +528,28 @@ def main(args, parser):
             normalized=args.normalized,
             adam_lr=args.lr,
             adam_betas=(args.beta1, args.beta2),
+        )
+    elif args.opt == "scion":
+        scion_param_groups = scion_partitions(group_specs, model, args)
+        scion_params_cnt = sum(
+            p.numel() for group in scion_param_groups for p in group["params"]
+        )
+        print(f"Optimized parameters: {scion_params_cnt}")
+        opt = Scion(
+            scion_param_groups,
+            lr=args.lr,
+            momentum=args.momentum,
+        )
+    elif args.opt == "scion-light":
+        scion_param_groups = scion_partitions(group_specs, model, args)
+        scion_params_cnt = sum(
+            p.numel() for group in scion_param_groups for p in group["params"]
+        )
+        print(f"Optimized parameters: {scion_params_cnt}")
+        opt = ScionLight(
+            scion_param_groups,
+            lr=args.lr,
+            momentum=args.momentum,
         )
     else:
         if args.cautious:

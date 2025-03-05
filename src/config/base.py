@@ -115,6 +115,8 @@ def parse_args(base_parser, args, namespace):
             "lamb",
             "normalized-sgd",
             "sgd-with-adam",
+            "scion",
+            "scion-light",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -179,6 +181,9 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--adopt_decouple", default=True, type=bool)
     parser.add_argument("--adopt_eps", default=1e-6, type=float)
     parser.add_argument("--cautious", default=False, type=bool)
+    parser.add_argument("--scion_lmh_scale", default=10.0, type=float)
+    parser.add_argument("--scion_emb_scale", default=1.0, type=float)
+    parser.add_argument("--scion_tr_scale", default=3.0, type=float)
     parser.add_argument(
         "--weight_decay_scheduler",
         default=None,
