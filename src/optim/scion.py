@@ -375,8 +375,8 @@ def zeroth_power_via_svd(G):
     return U @ V.T
 
 
-def scion_partitions(group_specs, model, cgf):
-    model_prefix = model if cgf.distributed_backend is None else model.module
+def scion_partitions(group_specs, model, cfg):
+    model_prefix = model if cfg.distributed_backend is None else model.module
 
     weight_tying_enabled = (
         hasattr(model_prefix, "lm_head")
@@ -395,14 +395,14 @@ def scion_partitions(group_specs, model, cgf):
             "params": [],
             "norm": "Sign",
             "norm_kwargs": {"normalized": False},
-            "scale": 10.0,
+            "scale": cfg.scion_lmh_scale,
         }
 
         other_group = {
             "params": [],
             "norm": "Auto",  #'Spectral',
             "norm_kwargs": {"max": True},
-            "scale": 3.0,
+            "scale": cfg.scion_tr_scale,
         }
 
         for g in group_specs:
@@ -419,21 +419,21 @@ def scion_partitions(group_specs, model, cgf):
             "params": [],
             "norm": "ColNorm",
             "norm_kwargs": {},
-            "scale": 1.0,
+            "scale": cfg.scion_emb_scale,
         }
 
         transformer_group = {
             "params": [],
             "norm": "Spectral",
             "norm_kwargs": {"max": True},
-            "scale": 3.0,
+            "scale": cfg.scion_tr_scale,
         }
 
         lm_head_group = {
             "params": [],
             "norm": "Sign",
             "norm_kwargs": {},
-            "scale": 10.0,
+            "scale": cfg.scion_lmh_scale,
         }
 
         for g in group_specs:

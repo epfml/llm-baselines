@@ -106,6 +106,9 @@ parser.add_argument('--sgd_lr_scale', default=1.0, type=float)
 parser.add_argument('--adopt_decouple', default=True, type=bool)
 parser.add_argument('--adopt_eps', default=1e-6, type=float)
 parser.add_argument('--cautious', default=False, type=bool) # whether to use cautious variant of optimizer with momentum 
+parser.add_argument('--scion_lmh_scale', default=10.0, type=float)
+parser.add_argument('--scion_emb_scale', default=1.0, type=float)
+parser.add_argument('--scion_tr_scale', default=3.0, type=float)
 parser.add_argument('--weight_decay_scheduler', default=None, choices=['linear', 'cos', 'stable-decay', 'wsd'],)
 parser.add_argument('--final_weight_decay', default=0.1, type=float)
 # Dataset params
