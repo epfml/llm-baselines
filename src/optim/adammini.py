@@ -30,7 +30,7 @@ class Adam_mini(torch.optim.Optimizer):
         verbose=True,
     ):
         """
-        This is the official implementation of Adam-mini (version 1.1.0).
+        This is the official implementation of Adam-mini (version 1.1.1).
 
         Paper: [Adam-mini: Use Fewer Learning Rates To Gain More](https://arxiv.org/abs/2406.16793).
 
@@ -82,7 +82,7 @@ class Adam_mini(torch.optim.Optimizer):
             self.n_kv_heads = n_heads
 
         self.device = device
-        self.world_size = world_size  # torch.cuda.device_count()
+        self.world_size = world_size
         self.verbose = verbose
         self.check_block_name = True
         self.head_numel = self.dim * self.dim // self.n_heads
@@ -107,24 +107,32 @@ class Adam_mini(torch.optim.Optimizer):
             )
 
         # Embedding layer. Use one lr per token
-        self.embd_names = {"embed", "embd", "wte"}  # move to mlp
+        self.embd_names = {"embed", "embd", "wte"}
         # Output layers. Use one lr per token
-        self.output_names = {"lm_head.weight", "output.weight"}  # move output to mlp
+        self.output_names = {"lm_head", "output", "final_layer"}
         # Query and Keys. User one lr per head
-        self.wqk_names = {"k_proj.weight", "q_proj.weight", "wq.weight", "wk.weight"}
+        self.wqk_names = {"k_proj", "q_proj", "wq", "wk", "query", "key", "c_attn"}
         # Values. Use one lr per neuron
-        # it is okay to set self.wv_names to be empty and use a single lr for the whole v. But this  will bring extra all_reduce operations
-        self.wv_names = {"v_proj.weight", "wv.weight"}
+        # it is also okay to set self.wv_names to be empty and use a single lr for the whole v. But be cautious that this will bring extra all_reduce operations
+        self.wv_names = {"v_proj", "wv", "value"}
         # attn_proj. Use one lr per neuron
-        self.attn_proj_names = {"o_proj.weight", "wo.weight", "attn.proj.weight"}
+        self.attn_proj_names = {"o_proj", "wo", "attn.proj", "attn.c_proj"}
         # MLPs. Use one lr per neuron
-        self.mlp_names = {"feed_forward", "linear", "mlp"}
-        # Blocks that use Adam. For old versions before v.1.1.0, this is for embedding layer and output layer. For the current version, this is empty
-        self.adam_block_names = {}
+        self.mlp_names = {
+            "feed_forward",
+            "linear",
+            "mlp",
+            "mlp.w1",
+            "mlp.w2",
+            "mlp.c_proj",
+        }
+        # Blocks that use Adam: bias terms
+        self.adam_block_names = {"bias"}
 
         optim_groups = []
-        # count_embd = count_output = count_wqk = 0
+
         for param_name, param in named_parameters:
+            param_name = param_name.lower()
             if not param.requires_grad:
                 continue
             if verbose:
@@ -136,7 +144,7 @@ class Adam_mini(torch.optim.Optimizer):
             state = {}
             state["name"] = param_name
             state["params"] = param
-            if "norm" in param_name or "ln_f" in param_name:
+            if "norm" in param_name or "ln" in param_name or "bias" in param_name:
                 state["weight_decay"] = 0.0
             else:
                 state["weight_decay"] = weight_decay
@@ -153,25 +161,24 @@ class Adam_mini(torch.optim.Optimizer):
         count_wv = 0
         count_attn_proj = 0
         count_mlp = 0
-        for param_name, param in self.named_parameters:
-            if not param.requires_grad:
+        for group in self.param_groups:
+            name = group["name"]
+            if "bias" in name:
                 continue
-            if any(embd_name in param_name for embd_name in self.embd_names):
+            if any(embd_name in name for embd_name in self.embd_names):
                 count_embd += 1
-            if any(output_name in param_name for output_name in self.output_names):
+            if any(output_name in name for output_name in self.output_names):
                 count_output += 1
-            if any(wqk_name in param_name for wqk_name in self.wqk_names):
+            if any(wqk_name in name for wqk_name in self.wqk_names):
                 count_wqk += 1
                 assert (
                     self.dim * self.dim
                 ) % self.n_heads == 0, f"{self.dim} {self.n_heads}"
-            if any(wv_name in param_name for wv_name in self.wv_names):
+            if any(wv_name in name for wv_name in self.wv_names):
                 count_wv += 1
-            if any(
-                attn_proj_name in param_name for attn_proj_name in self.attn_proj_names
-            ):
+            if any(attn_proj_name in name for attn_proj_name in self.attn_proj_names):
                 count_attn_proj += 1
-            if any(mlp_name in param_name for mlp_name in self.mlp_names):
+            if any(mlp_name in name for mlp_name in self.mlp_names):
                 count_mlp += 1
         if self.verbose:
             print(
@@ -232,7 +239,6 @@ class Adam_mini(torch.optim.Optimizer):
             self.check_block_name = False
 
         loss = None
-        device = self.device
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
@@ -247,7 +253,7 @@ class Adam_mini(torch.optim.Optimizer):
                 state = self.state[p]
                 if any(
                     adam_block_name in name for adam_block_name in self.adam_block_names
-                ):  # For v.1.1.0, we will not enter here
+                ):  # for bias terms
                     if p.grad is None:
                         continue
                     if len(state) == 0:
@@ -364,7 +370,7 @@ class Adam_mini(torch.optim.Optimizer):
                 else:  # other blocks. By default, this is for LayerNorms. Sometimes it is also fine to put Value here
                     if len(state) == 0:
                         block_numel = (
-                            torch.tensor(p.numel()).to(torch.float32).to(device)
+                            torch.tensor(p.numel()).to(torch.float32).to(self.device)
                         )
                         reduced = False
                         if self.world_size > 1:

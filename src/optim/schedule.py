@@ -98,7 +98,7 @@ def wsd_schedule(
 
             else:
                 raise ValueError(
-                    f"decay type {decay_type} is not in ['cosine','miror_cosine','linear','exp']"
+                    f"decay type {decay_type} is not in ['cosine','miror_cosine','linear','exp','square','sqrt']"
                 )
 
         else:
@@ -340,3 +340,161 @@ def dd_schedule(
             return second_final_lr_factor
 
     return schedule
+
+
+def wd_linear_schedule(n_iterations, init_wd, final_wd):
+    """
+    Linear decay schedule for weight decay.
+    Args:
+        n_iterations: total number of iterations
+        init_wd: initial value of weight decay
+        final_wd: weight decay value at the end
+    Returns:
+        schedule: a function that takes the current iteration and
+        returns the value for the weight decay
+    """
+
+    def schedule(step):
+        if step >= n_iterations:
+            return final_wd
+        return init_wd + (final_wd - init_wd) * (step / n_iterations)
+
+    return schedule
+
+
+def wd_cosine_schedule(n_iterations, init_wd, final_wd):
+    """
+    Cosine decay schedule for weight decay.
+    Args:
+        n_iterations: total number of iterations
+        init_wd: initial value of weight decay
+        final_wd: weight decay value at the end
+    Returns:
+        schedule: a function that takes the current iteration and
+        returns the value for the weight decay
+    """
+
+    def schedule(step):
+        if step >= n_iterations:
+            return final_wd
+        cosine_decay = 0.5 * (1 + math.cos(math.pi * step / n_iterations))
+        return final_wd + (init_wd - final_wd) * cosine_decay
+
+    return schedule
+
+
+def wd_stable_decay_schedule(
+    n_iterations, init_wd, final_wd, fract_decay=0.1, decay_type="linear"
+):
+    """
+    Stable decay schedule for weight decay.
+    Args:
+        n_iterations: total number of iterations
+        init_wd: initial value of weight decay
+        final_wd: weight decay value at the end
+        fract_decay: fraction of iterations used for decay
+    Returns:
+        schedule: a function that takes the current iteration and
+        returns the value for the weight decay
+    """
+    n_anneal_steps = int(fract_decay * n_iterations)
+    n_hold = n_iterations - n_anneal_steps
+
+    def schedule(step):
+        if step < n_hold:
+            return init_wd
+        elif step < n_iterations:
+            progress = (step - n_hold) / n_anneal_steps
+            if decay_type == "linear":
+                return init_wd + (final_wd - init_wd) * progress
+            elif decay_type == "exp":
+                return init_wd * (final_wd / init_wd) ** progress
+            elif decay_type == "cosine":
+                cosine_decay = 0.5 * (1 + math.cos(math.pi * progress))
+                return final_wd + (init_wd - final_wd) * cosine_decay
+            elif decay_type == "miror_cosine":
+                cosine_value = final_wd + (init_wd - final_wd) * 0.5 * (
+                    1 + math.cos(math.pi * progress)
+                )
+                linear_value = final_wd + (init_wd - final_wd) * (1 - progress)
+                return linear_value * 2 - cosine_value
+            elif decay_type == "square":
+                return final_wd + (init_wd - final_wd) * (1 - progress**2)
+            elif decay_type == "sqrt":
+                return final_wd + (init_wd - final_wd) * (1 - math.sqrt(progress))
+            else:
+                raise ValueError(
+                    f"decay type {decay_type} is not in ['cosine','miror_cosine','linear','exp','square','sqrt']"
+                )
+        else:
+            return final_wd
+
+    return schedule
+
+
+def wd_wsd_schedule(
+    n_iterations,
+    init_wd,
+    final_wd,
+    n_warmup,
+    init_div_factor=100,
+    fract_decay=0.1,
+    decay_type="linear",
+):
+    """
+    Warmup, hold, and decay schedule for weight decay.
+    Args:
+        n_iterations: total number of iterations
+        init_wd: initial value of weight decay
+        final_wd: weight decay value at the end
+        n_warmup:
+        init_div_factor:
+        fract_decay: fraction of iterations used for decay
+    Returns:
+        schedule: a function that takes the current iteration and
+        returns the value for the weight decay
+    """
+    n_anneal_steps = int(fract_decay * n_iterations)
+    n_hold = n_iterations - n_anneal_steps
+
+    def schedule(step):
+        if step < n_warmup:
+            return (
+                init_wd / init_div_factor
+                + (init_wd - init_wd / init_div_factor) * step / n_warmup
+            )
+        elif step < n_hold:
+            return init_wd
+        elif step < n_iterations:
+            progress = (step - n_hold) / n_anneal_steps
+            if decay_type == "linear":
+                return init_wd + (final_wd - init_wd) * progress
+            elif decay_type == "exp":
+                return init_wd * (final_wd / init_wd) ** progress
+            elif decay_type == "cosine":
+                cosine_decay = 0.5 * (1 + math.cos(math.pi * progress))
+                return final_wd + (init_wd - final_wd) * cosine_decay
+            elif decay_type == "miror_cosine":
+                cosine_value = final_wd + (init_wd - final_wd) * 0.5 * (
+                    1 + math.cos(math.pi * progress)
+                )
+                linear_value = final_wd + (init_wd - final_wd) * (1 - progress)
+                return linear_value * 2 - cosine_value
+            elif decay_type == "square":
+                return final_wd + (init_wd - final_wd) * (1 - progress**2)
+            elif decay_type == "sqrt":
+                return final_wd + (init_wd - final_wd) * (1 - math.sqrt(progress))
+            else:
+                raise ValueError(
+                    f"decay type {decay_type} is not in ['cosine','miror_cosine','linear','exp','square','sqrt']"
+                )
+        else:
+            return final_wd
+
+    return schedule
+
+
+def update_weight_decay(optimizer, weight_decay_term):
+    """This function applies the new weight decay value to optimizer state."""
+    for param_group in optimizer.param_groups:
+        param_group["weight_decay"] = weight_decay_term
