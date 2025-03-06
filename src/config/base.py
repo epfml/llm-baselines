@@ -117,6 +117,7 @@ def parse_args(base_parser, args, namespace):
             "sgd-with-adam",
             "scion",
             "scion-light",
+            "d-muon",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)

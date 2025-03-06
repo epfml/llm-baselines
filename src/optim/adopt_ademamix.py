@@ -3,9 +3,10 @@ Here is an original implementation of ADOPT.
 Source: https://github.com/iShohei220/adopt
 """
 
-import torch
 import math
 from typing import Callable, Optional, Tuple
+
+import torch
 
 
 def linear_warmup_scheduler(step, alpha_end, alpha_start=0, warmup=1):
@@ -38,9 +39,9 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
         params,
         lr: float = 1e-3,
         betas: Tuple[float, float, float] = (0.9, 0.95, 0.9999),
-        alpha : float = 8.0,
-        beta3_warmup = None,
-        alpha_warmup = None,
+        alpha: float = 8.0,
+        beta3_warmup=None,
+        alpha_warmup=None,
         eps: float = 1e-6,
         clip_lambda: Optional[Callable[[int], float]] = lambda step: step**0.25,
         weight_decay: float = 0.0,
@@ -63,14 +64,14 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
 
         self.clip_lambda = clip_lambda
         defaults = dict(
-            lr=lr, 
+            lr=lr,
             betas=betas,
             alpha=alpha,
             beta3_warmup=beta3_warmup,
-            alpha_warmup=alpha_warmup, 
-            eps=eps, 
-            weight_decay=weight_decay, 
-            decouple=decouple
+            alpha_warmup=alpha_warmup,
+            eps=eps,
+            weight_decay=weight_decay,
+            decouple=decouple,
         )
         super().__init__(params, defaults)
 
@@ -113,7 +114,7 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
                         state["exp_avg_fast"] = torch.zeros_like(
                             p, memory_format=torch.preserve_format
                         )
-                    else: 
+                    else:
                         state["exp_avg_fast"] = None
                     state["exp_avg_sq"] = torch.zeros_like(
                         p, memory_format=torch.preserve_format
@@ -172,7 +173,7 @@ class ADOPTAdEMAMix(torch.optim.Optimizer):
                     normed_grad.clamp_(-clip, clip)
 
                 if beta1 != 0:
-                    bias_correction = 1 - beta1 ** step
+                    bias_correction = 1 - beta1**step
                     exp_avg_fast.lerp_(normed_grad, 1 - beta1)
                     exp_avg_fast.div(bias_correction)
                 else:

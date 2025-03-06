@@ -3,9 +3,10 @@ Here is an original implementation of Scion.
 Source: TBD
 """
 
-
 import math
+
 import torch
+
 from .muon import zeropower_via_newtonschulz5
 
 #######################################################
