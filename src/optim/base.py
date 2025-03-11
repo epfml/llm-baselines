@@ -15,7 +15,7 @@ from .schedule import (update_weight_decay, wd_cosine_schedule,
                        wd_wsd_schedule)
 from .utils import (eval, get_batch, get_parameter_norms, load_checkpoint,
                     load_worker_state, log_prodigy_lr, save_checkpoint,
-                    save_worker_state)
+                    save_worker_state, visualize_routing)
 
 
 def train(
@@ -130,7 +130,7 @@ def train(
                     microstep_idx=microstep_idx,
                     gradient_accumulation_steps=cfg.acc_steps,
                 ):
-                    outputs = model(x, targets=y)
+                    outputs = model(x, targets=y, moe=cfg.moe)
 
             loss = outputs["loss"] / cfg.acc_steps
             loss.backward()
@@ -227,6 +227,9 @@ def train(
             and distributed_backend.is_master_process()  # Only log on master rank
         ):
             train_loss = loss.detach().cpu().item() * cfg.acc_steps
+            train_aux_losses = {
+                f"train/{k}": v for k, v in outputs["aux_losses"].items()
+            }
 
             current_lrs = [param_group["lr"] for param_group in opt.param_groups]
 
@@ -253,6 +256,7 @@ def train(
                     "mean_grad_norm": (
                         torch.tensor(grad_norms).mean().item() if grad_norms else 0
                     ),
+                    **train_aux_losses,
                 }
 
                 if cfg.weight_decay_scheduler:
@@ -261,8 +265,6 @@ def train(
                 if cfg.opt == "prodigy":
                     wandb_logs["effective_lr"] = prodigy_efective_lrs[0]
 
-                # log the L2 norm of the parameters
-                # works in a single gpu setting
                 if cfg.log_parameter_norms:
                     raw_model = distributed_backend.get_raw_model(model)
                     model_norm = get_parameter_norms(raw_model, order=cfg.norm_order)
@@ -303,12 +305,14 @@ def eval_and_log(
     # to make sure we start from the beginning of the validation set,
     # i.e. repeat the same batches
     val_reader.set_step(0)
-    val_acc, val_loss, val_perplexity = eval(
+    val_acc, val_loss, val_perplexity, val_aux_losses, router_logits = eval(
         model,
         val_reader,
         cfg.device,
         max_num_batches=max_num_batches,
         ctx=type_ctx,
+        moe=cfg.moe,
+        get_router_logits=cfg.moe and cfg.plot_router_logits,
         cfg=cfg,
     )
 
@@ -327,6 +331,7 @@ def eval_and_log(
                 "final-val/loss": val_loss,
                 "final-val/perplexity": val_perplexity,
                 "final-val/acc": val_acc,
+                **val_aux_losses,
             }
         else:
             logs = {
@@ -335,7 +340,11 @@ def eval_and_log(
                 "val/loss": val_loss,
                 "val/perplexity": val_perplexity,
                 "val/acc": val_acc,
+                **val_aux_losses,
             }
+        if cfg.moe and cfg.plot_router_logits:
+            routing_logs = visualize_routing(router_logits, cfg)
+            logs = {**logs, **routing_logs}
 
         wandb.log(logs)
         if cfg.eval_seq_prefix != "none" and (
