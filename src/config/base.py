@@ -260,5 +260,36 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--bias", default=False, type=bool)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--mlp_dim_exp_factor", default=1.0, type=float)
+    parser.add_argument("--moe", action="store_true")
+    parser.add_argument(
+        "--moe_routing",
+        default="standard_gating",
+        type=str,
+        choices=["standard_gating", "expert_choice"],
+    )
+    parser.add_argument("--moe_num_experts", default=8, type=int)
+    parser.add_argument(  # only used for expert choice routing
+        "--capacity_factor", default=2.0, type=float
+    )
+    parser.add_argument(  # deepseek routing, experts that are always active
+        "--moe_num_shared_experts", default=0, type=int
+    )
+    parser.add_argument(
+        "--moe_router_loss",
+        default="load_balancing_z_loss",
+        type=str,
+        choices=["entropy", "load_balancing_only", "load_balancing_z_loss"],
+    )
+    parser.add_argument("--moe_num_experts_per_tok", default=2, type=int)
+    parser.add_argument("--moe_entropy_loss_factor", default=0.01, type=float)
+    parser.add_argument("--moe_aux_loss_factor", default=0.1, type=float)
+    parser.add_argument("--moe_z_loss_factor", default=0.01, type=float)
+    parser.add_argument(
+        "--moe_softmax_order",
+        type=str,
+        default="topk_softmax",
+        choices=["softmax_topk", "topk_softmax"],
+    )
+    parser.add_argument("--plot_router_logits", action="store_true")
 
     return parser.parse_args(args, namespace)

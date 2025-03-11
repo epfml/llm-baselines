@@ -735,6 +735,7 @@ def get_exp_name(
         "device",
         "adema_beta3_warmup",
         "adema_alpha_warmup",
+        "plot_router_logits",
     ],
 ):
     # Get the default values
@@ -747,6 +748,8 @@ def get_exp_name(
     for key in key_args:
         if hasattr(args, key):
             value = getattr(args, key)
+            if key == "model" and hasattr(args, "moe") and args.moe:
+                value = f"moe_{value}"
             prefix_parts.append(f"{key}-{value}")
 
     prefix = "_".join(prefix_parts)
