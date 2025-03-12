@@ -95,7 +95,9 @@ def tokenize_arxiv(root: Path, year: int):
 
     # save to dir
     tpath = root/str(year)
-    tpath.mkdir(parents=True)
+    # tpath.mkdir(parents=True)
+    tpath.mkdir(parents=True, exist_ok=True)
+
     for x, name in zip([tokens, tokens_val, tokens_test],
                        ["train", "val", "test"]):
         mem = np.memmap(tpath/f"{name}.npy", dtype=np.uint16, mode="w+",
