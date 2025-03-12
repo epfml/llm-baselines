@@ -27,29 +27,51 @@ def convert_to_markdown(args: Tuple[Path, Path]):
 
 
 def fetch_arxiv(root: Path, year: int):
-    # download latex
+    """Download and extract ArXiv LaTeX dataset for a given year."""
     url = f"https://www.cs.cornell.edu/projects/kddcup/download/hep-th-{year}.tar.gz"
+    
     texroot = root/"tex"
-    print("Downloading Arxiv year", year)
-    req = requests.get(url, timeout=60)
-    with NamedTemporaryFile(suffix=".tar.gz") as f:
-        f.write(req.content)
-        logging.debug("Tar saved in tempfile %s" % f.name)
+    mdroot = root/"md"/str(year)
+
+    if mdroot.exists():  # Skip if already processed
+        print(f"Skipping download: {year} already exists")
+        return
+
+    print(f"Downloading ArXiv year {year}")
+    response = requests.get(url, timeout=60)
+    with NamedTemporaryFile(suffix=".tar.gz", delete=True) as f:
+        f.write(response.content)
         with tarfile.open(f.name) as tar:
-            logging.debug("Extracting tarfile")
             tar.extractall(texroot)
 
-    # convert to markdown
-    mdroot = root/"md"/str(year)
-    # mdroot.mkdir(parents=True)
+    # Convert LaTeX files to Markdown
     mdroot.mkdir(parents=True, exist_ok=True)
+    tex_files = list((texroot / str(year)).iterdir())
+    for texfile in tqdm(tex_files, desc=f"Converting {year} to Markdown"):
+        convert_to_markdown(texfile, mdroot)
+    # # download latex
+    # url = f"https://www.cs.cornell.edu/projects/kddcup/download/hep-th-{year}.tar.gz"
+    # texroot = root/"tex"
+    # print("Downloading Arxiv year", year)
+    # req = requests.get(url, timeout=60)
+    # with NamedTemporaryFile(suffix=".tar.gz") as f:
+    #     f.write(req.content)
+    #     logging.debug("Tar saved in tempfile %s" % f.name)
+    #     with tarfile.open(f.name) as tar:
+    #         logging.debug("Extracting tarfile")
+    #         tar.extractall(texroot)
 
-    files = list((texroot/str(year)).iterdir())
-    with Pool(os.cpu_count()) as p:
-        args = [(texfile, mdroot) for texfile in files]
-        for _ in tqdm(p.imap_unordered(convert_to_markdown, args),
-                      desc="Converting to markdown", total=len(files)):
-            pass
+    # # convert to markdown
+    # mdroot = root/"md"/str(year)
+    # # mdroot.mkdir(parents=True)
+    # mdroot.mkdir(parents=True, exist_ok=True)
+
+    # files = list((texroot/str(year)).iterdir())
+    # with Pool(os.cpu_count()) as p:
+    #     args = [(texfile, mdroot) for texfile in files]
+    #     for _ in tqdm(p.imap_unordered(convert_to_markdown, args),
+    #                   desc="Converting to markdown", total=len(files)):
+    #         pass
 
 
 def tokenize_arxiv(root: Path, year: int):
