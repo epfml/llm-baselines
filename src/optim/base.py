@@ -42,6 +42,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     
     if rng_state_dict is not None and  rng_state_dict.get("train_sampler_state", None) is not None:
         train_sampler.generator.set_state(rng_state_dict["train_sampler_state"])
+    sampler_state_before_iter = None
     if hasattr(train_sampler, "set_epoch"):
         train_sampler.set_epoch(train_epochs)
     else:
