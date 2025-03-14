@@ -104,6 +104,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
             loss = outputs['loss'] / acc_steps
             loss.backward()
+            if distributed_backend.is_master_process() and extra_args.wandb:
+                wandb.log({"train/loss_step": loss.detach().cpu().item(), "iter": itr})
             if itr == 0:
                 print(f"First batch loss: {loss}")
                 if torch.isnan(loss):
