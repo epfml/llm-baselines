@@ -63,8 +63,8 @@ def fetch_arxiv(root: Path, year: int):
 
     # convert to markdown
     mdroot = root/"md"/str(year)
-    mdroot.mkdir(parents=True)
-    # mdroot.mkdir(parents=True, exist_ok=True)
+    # mdroot.mkdir(parents=True)
+    mdroot.mkdir(parents=True, exist_ok=True)
 
     files = list((texroot/str(year)).iterdir())
     with Pool(os.cpu_count()) as p:
