@@ -98,19 +98,35 @@ def main(args):
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
 
+        # # Retrieve previous WandB run ID if resuming
+        # wandb_run_id = os.getenv("WANDB_RUN_ID", None)
         # Retrieve previous WandB run ID if resuming
         wandb_run_id = os.getenv("WANDB_RUN_ID", None)
 
+        # If resuming from a checkpoint, load the run ID from the checkpoint BEFORE initializing WandB
+        if args.use_pretrained is not None:
+            last_ckpt_path = os.path.join(ckpt_path, args.use_pretrained)
+            if os.path.exists(last_ckpt_path):
+                checkpoint = torch.load(last_ckpt_path)
+                if "wandb_run_id" in checkpoint:
+                    wandb_run_id = checkpoint["wandb_run_id"]
+                    os.environ["WANDB_RUN_ID"] = wandb_run_id  # Set the ID before WandB init
+                    print(f"🟢 Resuming WandB run with ID: {wandb_run_id}")
+                else:
+                    print("🔴 Warning: WandB Run ID not found in checkpoint!")
+
+        # Initialize WandB with the correct ID
         wandb.init(
             project=args.wandb_project,
-            name=exp_name,
+            name=args.exp_name,
             config=params_copy,
-            resume="allow",  # Resume if a previous run exists
-            id=wandb_run_id  # Use existing run ID if available
+            resume="allow",  # Ensures WandB tries to resume
+            id=wandb_run_id  # Use the existing run ID if available
         )
 
-        # Save the current WandB run ID for future resumption
+        # Now store the run ID in the environment for future reference
         os.environ["WANDB_RUN_ID"] = wandb.run.id
+
 
     
     ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
