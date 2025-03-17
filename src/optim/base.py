@@ -194,18 +194,43 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 t0 = time.time()
         if distributed_backend.is_master_process():
             if extra_args.save_checkpoint_freq is not None and itr % extra_args.save_checkpoint_freq == 0:
-                print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")
-                save_checkpoint(distributed_backend=distributed_backend,
-                                model=model,
-                                opt=opt,
-                                scheduler=scheduler,
-                                itr=itr,
-                                cpu_rng_state=torch.get_rng_state(),
-                                gpu_rng_state=torch.cuda.get_rng_state(),
-                                numpy_rng_state=np.random.get_state(),
-                                py_rng_state=random.getstate(),
-                                train_sampler_state=sampler_state_before_iter,
-                                ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
+                # Determine the number of digits needed for zero-padding
+                max_digits = len(str(extra_args.iterations))  # Assumes 'iterations' is stored in extra_args
+
+                # Zero-pad the iteration number
+                formatted_itr = str(itr).zfill(max_digits)
+
+                # Create the checkpoint filename
+                ckpt_filename = f"ckpt_{formatted_itr}.pt"
+                ckpt_path = os.path.join(os.path.dirname(ckpt_path), ckpt_filename)
+
+                print(f"saving checkpoint to {ckpt_path}")
+                save_checkpoint(
+                    distributed_backend=distributed_backend,
+                    model=model,
+                    opt=opt,
+                    scheduler=scheduler,
+                    itr=itr,
+                    cpu_rng_state=torch.get_rng_state(),
+                    gpu_rng_state=torch.cuda.get_rng_state(),
+                    numpy_rng_state=np.random.get_state(),
+                    py_rng_state=random.getstate(),
+                    train_sampler_state=sampler_state_before_iter,
+                    ckpt_path=ckpt_path
+                )
+
+                # print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")
+                # save_checkpoint(distributed_backend=distributed_backend,
+                #                 model=model,
+                #                 opt=opt,
+                #                 scheduler=scheduler,
+                #                 itr=itr,
+                #                 cpu_rng_state=torch.get_rng_state(),
+                #                 gpu_rng_state=torch.cuda.get_rng_state(),
+                #                 numpy_rng_state=np.random.get_state(),
+                #                 py_rng_state=random.getstate(),
+                #                 train_sampler_state=sampler_state_before_iter,
+                #                 ckpt_path=os.path.join(os.path.dirname(ckpt_path), f"ckpt_{itr}.pt"))
         
 
                 
