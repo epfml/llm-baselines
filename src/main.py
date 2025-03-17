@@ -129,7 +129,7 @@ def main(args):
             project=args.wandb_project,
             name=args.exp_name,
             config=params_copy,
-            resume="must",  # Forces WandB to resume, avoids accidental new runs
+            resume="must" if wandb_run_id else "allow",  # Forces WandB to resume, avoids accidental new runs
             id=wandb_run_id  # Use the existing run ID if available
         )
 
