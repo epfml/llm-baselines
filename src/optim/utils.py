@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from contextlib import nullcontext, contextmanager, ExitStack
+import wandb
 
 
 def get_batch(dataloader, device="cpu"):
