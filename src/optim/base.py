@@ -205,6 +205,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 ckpt_path = os.path.join(os.path.dirname(ckpt_path), ckpt_filename)
 
                 print(f"saving checkpoint to {ckpt_path}")
+                print(f"Run ID: {wandb.run.id}")
+                
                 save_checkpoint(
                     distributed_backend=distributed_backend,
                     model=model,
@@ -219,6 +221,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     ckpt_path=ckpt_path,
                     wandb_run_id=wandb.run.id if wandb.run else None  # Store WandB run ID
                 )
+
 
                 # print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")
                 # save_checkpoint(distributed_backend=distributed_backend,
