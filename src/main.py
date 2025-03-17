@@ -123,7 +123,7 @@ def main(args):
                     print(f"🟢 Resuming WandB run with ID: {wandb_run_id}")
                 else:
                     print("🔴 Warning: WandB Run ID not found in checkpoint!")
-
+        print(f"Run pre init ID: {wandb.run.id}")
         # Initialize WandB with the correct ID
         wandb.init(
             project=args.wandb_project,
@@ -132,7 +132,7 @@ def main(args):
             resume="must" if wandb_run_id else "allow",  # Forces WandB to resume, avoids accidental new runs
             id=wandb_run_id  # Use the existing run ID if available
         )
-
+        print(f"Run post init ID: {wandb.run.id}")
         # Now store the run ID in the environment for future reference
         os.environ["WANDB_RUN_ID"] = wandb.run.id
         print(f"🟢 WandB run started with ID: {wandb.run.id}")
