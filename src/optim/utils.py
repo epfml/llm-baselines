@@ -44,6 +44,7 @@ def save_checkpoint(distributed_backend, model, opt, scheduler, itr, ckpt_path, 
         'optimizer': opt.state_dict(),
         'scheduler': scheduler.state_dict(),
         'itr': itr,
+        'wandb_run_id': wandb_run_id  # Save WandB Run ID
     }, **extra_args)
 
     torch.save(checkpoint, ckpt_path)
