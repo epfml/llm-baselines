@@ -100,6 +100,15 @@ def main(args):
 
         # # Retrieve previous WandB run ID if resuming
         # wandb_run_id = os.getenv("WANDB_RUN_ID", None)
+        # Define checkpoint directory **before** accessing it
+        ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
+
+        # Ensure checkpoint directory exists
+        if not os.path.exists(ckpt_path):
+            if distributed_backend.is_master_process():
+                os.makedirs(ckpt_path)
+            distributed_backend.sync()
+
         # Retrieve previous WandB run ID if resuming
         wandb_run_id = os.getenv("WANDB_RUN_ID", None)
 
@@ -120,12 +129,14 @@ def main(args):
             project=args.wandb_project,
             name=args.exp_name,
             config=params_copy,
-            resume="allow",  # Ensures WandB tries to resume
+            resume="must",  # Forces WandB to resume, avoids accidental new runs
             id=wandb_run_id  # Use the existing run ID if available
         )
 
         # Now store the run ID in the environment for future reference
         os.environ["WANDB_RUN_ID"] = wandb.run.id
+        print(f"🟢 WandB run started with ID: {wandb.run.id}")
+
 
 
     
