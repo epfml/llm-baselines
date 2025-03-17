@@ -38,7 +38,8 @@ def eval(model, data_val_iter, device='cpu', max_num_batches=24, ctx=nullcontext
 
 
 def save_checkpoint(distributed_backend, model, opt, scheduler, itr, ckpt_path, **extra_args):
-
+    
+    wandb_run_id = wandb.run.id if wandb.run else None
     checkpoint = dict({
         'model': distributed_backend.get_raw_model(model).state_dict(),
         'optimizer': opt.state_dict(),
