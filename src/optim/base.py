@@ -216,7 +216,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     numpy_rng_state=np.random.get_state(),
                     py_rng_state=random.getstate(),
                     train_sampler_state=sampler_state_before_iter,
-                    ckpt_path=ckpt_path
+                    ckpt_path=ckpt_path,
+                    wandb_run_id=wandb.run.id if wandb.run else None  # Store WandB run ID
                 )
 
                 # print(f"saving checkpoint to {os.path.dirname(ckpt_path)}/ckpt_{itr}.pt")

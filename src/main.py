@@ -90,10 +90,28 @@ def main(args):
 
     args.world_size = distributed_backend.get_world_size()
     exp_name = args.exp_name
+    # if distributed_backend.is_master_process() and args.wandb:
+    #     params_copy = copy.deepcopy(vars(args))
+    #     del params_copy['device']
+    #     wandb.init(project=args.wandb_project, name=exp_name, config=params_copy)
     if distributed_backend.is_master_process() and args.wandb:
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
-        wandb.init(project=args.wandb_project, name=exp_name, config=params_copy)
+
+        # Retrieve previous WandB run ID if resuming
+        wandb_run_id = os.getenv("WANDB_RUN_ID", None)
+
+        wandb.init(
+            project=args.wandb_project,
+            name=exp_name,
+            config=params_copy,
+            resume="allow",  # Resume if a previous run exists
+            id=wandb_run_id  # Use existing run ID if available
+        )
+
+        # Save the current WandB run ID for future resumption
+        os.environ["WANDB_RUN_ID"] = wandb.run.id
+
     
     ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
     if not os.path.exists(ckpt_path):
@@ -117,6 +135,9 @@ def main(args):
         last_ckpt_path = args.use_pretrained
         print(f"Resuming from {last_ckpt_path}")
         checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+        # Restore previous WandB run ID from checkpoint if available
+        if "wandb_run_id" in checkpoint:
+            os.environ["WANDB_RUN_ID"] = checkpoint["wandb_run_id"]
         model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
         # FIXME checkpoints from compiled model have _orig_mod keyword
 
