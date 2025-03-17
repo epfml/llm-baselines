@@ -114,10 +114,13 @@ def main(args):
 
         # If resuming from a checkpoint, load the run ID from the checkpoint BEFORE initializing WandB
         if args.use_pretrained is not None:
+            print("Here 1, using pretrained")
             last_ckpt_path = os.path.join(ckpt_path, args.use_pretrained)
             if os.path.exists(last_ckpt_path):
+                print("here 2 exists last ckpt")
                 checkpoint = torch.load(last_ckpt_path)
                 if "wandb_run_id" in checkpoint:
+                    print("wandrunid is in ckpt")
                     wandb_run_id = checkpoint["wandb_run_id"]
                     os.environ["WANDB_RUN_ID"] = wandb_run_id  # Set the ID before WandB init
                     print(f"🟢 Resuming WandB run with ID: {wandb_run_id}")
