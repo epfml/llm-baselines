@@ -113,7 +113,8 @@ def main(args):
     if args.use_pretrained is not None:
         last_ckpt_path = args.use_pretrained
         print(f"Resuming from {last_ckpt_path}")
-        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+        if os.path.exists(last_ckpt_path):
+            checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
         # Restore previous WandB run ID from checkpoint if available
         if "wandb_run_id" in checkpoint:
             os.environ["WANDB_RUN_ID"] = checkpoint["wandb_run_id"]
