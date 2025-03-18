@@ -124,6 +124,7 @@ def main(args):
     #     del params_copy['device']
     #     wandb.init(project=args.wandb_project, name=exp_name, config=params_copy)
     if distributed_backend.is_master_process() and args.wandb:
+        checkpoint =None
         params_copy = copy.deepcopy(vars(args))
         del params_copy['device']
 
