@@ -113,8 +113,7 @@ def main(args):
     if args.use_pretrained is not None:
         last_ckpt_path = args.use_pretrained
         print(f"Resuming from {last_ckpt_path}")
-        if os.path.exists(last_ckpt_path):
-            checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
         # Restore previous WandB run ID from checkpoint if available
         if "wandb_run_id" in checkpoint:
             os.environ["WANDB_RUN_ID"] = checkpoint["wandb_run_id"]
@@ -173,27 +172,57 @@ def main(args):
 
 
     
-    
-        model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
-        # FIXME checkpoints from compiled model have _orig_mod keyword
+        if checkpoint is not None:
+            model_state_dict = {
+                distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]: v
+                for k, v in checkpoint['model'].items()
+            }
 
-        optimizer_state_dict = checkpoint['optimizer']
-        rng_state_dict = {
-            module: checkpoint[module] for module in [
-                "cpu_rng_state", 
-                "gpu_rng_state", 
-                "numpy_rng_state", 
-                "py_rng_state",
-                "train_sampler_state"
-            ]
-        }
+            optimizer_state_dict = checkpoint['optimizer']
+            rng_state_dict = {
+                module: checkpoint[module]
+                for module in [
+                    "cpu_rng_state",
+                    "gpu_rng_state",
+                    "numpy_rng_state",
+                    "py_rng_state",
+                    "train_sampler_state",
+                ]
+            }
 
-        model.load_state_dict(model_state_dict) 
-        opt.load_state_dict(optimizer_state_dict)
-        itr = checkpoint['itr']
-        if scheduler is not None:
-            scheduler_state_dict = checkpoint['scheduler']
-            scheduler.load_state_dict(scheduler_state_dict)
+            model.load_state_dict(model_state_dict)
+            opt.load_state_dict(optimizer_state_dict)
+            
+            print(f"Checkpoint loaded from {last_ckpt_path}, resuming training from iteration {checkpoint['itr']}")
+            itr = checkpoint['itr']
+            if scheduler is not None:
+                scheduler_state_dict = checkpoint['scheduler']
+                scheduler.load_state_dict(scheduler_state_dict)
+        else:
+            print("No checkpoint found, starting from scratch.")
+            itr = 0
+            rng_state_dict = None  # Reset RNG state since no checkpoint exists
+
+        # model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
+        # # FIXME checkpoints from compiled model have _orig_mod keyword
+
+        # optimizer_state_dict = checkpoint['optimizer']
+        # rng_state_dict = {
+        #     module: checkpoint[module] for module in [
+        #         "cpu_rng_state", 
+        #         "gpu_rng_state", 
+        #         "numpy_rng_state", 
+        #         "py_rng_state",
+        #         "train_sampler_state"
+        #     ]
+        # }
+
+        # model.load_state_dict(model_state_dict) 
+        # opt.load_state_dict(optimizer_state_dict)
+        # itr = checkpoint['itr']
+        # if scheduler is not None:
+        #     scheduler_state_dict = checkpoint['scheduler']
+        #     scheduler.load_state_dict(scheduler_state_dict)
 
     if args.model in ['base', 'llama2']: # all train functions have the same interface
         train = train_base
