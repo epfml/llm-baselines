@@ -90,6 +90,35 @@ def main(args):
 
     args.world_size = distributed_backend.get_world_size()
     exp_name = args.exp_name
+
+
+    ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
+    if not os.path.exists(ckpt_path):
+        if distributed_backend.is_master_process():
+            os.makedirs(ckpt_path)
+        distributed_backend.sync()
+    elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
+        print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
+        sys.exit(0)
+
+    itr = 0
+    rng_state_dict = None
+    if args.use_pretrained == "auto":
+        checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
+        if checkpoints:
+            args.use_pretrained = sorted(checkpoints)[-1]
+        else:
+            args.use_pretrained = None
+    
+    if args.use_pretrained is not None:
+        last_ckpt_path = args.use_pretrained
+        print(f"Resuming from {last_ckpt_path}")
+        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
+        # Restore previous WandB run ID from checkpoint if available
+        if "wandb_run_id" in checkpoint:
+            os.environ["WANDB_RUN_ID"] = checkpoint["wandb_run_id"]
+
+
     # if distributed_backend.is_master_process() and args.wandb:
     #     params_copy = copy.deepcopy(vars(args))
     #     del params_copy['device']
@@ -143,31 +172,7 @@ def main(args):
 
 
     
-    ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
-    if not os.path.exists(ckpt_path):
-        if distributed_backend.is_master_process():
-            os.makedirs(ckpt_path)
-        distributed_backend.sync()
-    elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
-        print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
-        sys.exit(0)
-
-    itr = 0
-    rng_state_dict = None
-    if args.use_pretrained == "auto":
-        checkpoints = [file for file in os.listdir(ckpt_path) if 'ckpt_' in file]
-        if checkpoints:
-            args.use_pretrained = sorted(checkpoints)[-1]
-        else:
-            args.use_pretrained = None
     
-    if args.use_pretrained is not None:
-        last_ckpt_path = args.use_pretrained
-        print(f"Resuming from {last_ckpt_path}")
-        checkpoint = torch.load(os.path.join(ckpt_path, last_ckpt_path))
-        # Restore previous WandB run ID from checkpoint if available
-        if "wandb_run_id" in checkpoint:
-            os.environ["WANDB_RUN_ID"] = checkpoint["wandb_run_id"]
         model_state_dict = {distributed_backend.translate_model_parameter_name_for_node(k.replace("_orig_mod.", ""))[0]:v for k,v in checkpoint['model'].items()}
         # FIXME checkpoints from compiled model have _orig_mod keyword
 
