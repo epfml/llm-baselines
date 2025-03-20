@@ -180,8 +180,8 @@ class CausalSelfAttention(nn.Module):
             q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
             v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
-            print(f"Attention mask: {mask_short[:5,0]}")
-            print(f"type mask: {type(mask_short[0,0])}")
+            print(f"Attention short mask: {mask_short[:5,0]}")
+            print(f"type mask short: {type(mask_short[0,0])}")
             y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
 
         y_long = None
@@ -190,6 +190,8 @@ class CausalSelfAttention(nn.Module):
             q_long, k_long = [t.view(B, T, self.n_heads_long, self.long_heads_dim).transpose(1, 2) for t in qk_long]
             v_long = self.v_long(x).view(B, T, self.n_heads_long, self.head_dim).transpose(1, 2)
             mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+            print(f"Attention long mask: {mask_long[:5,0]}")
+            print(f"type mask long: {type(mask_long[0,0])}")
             y_long = F.scaled_dot_product_attention(q_long, k_long, v_long, attn_mask=mask_long, dropout_p=self.dropout, is_causal=mask_long is None)
 
         # Combine the outputs from the two groups (concatenating along the head dimension)
