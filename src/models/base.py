@@ -143,6 +143,7 @@ class CausalSelfAttention(nn.Module):
         self.n_heads_long = config.n_heads_long
         self.short_heads_dim = config.short_heads_dim
         self.long_heads_dim = config.long_heads_dim
+        self.dtype = config.dtype
         if self.n_heads_short > 0:
             self.qk_short = nn.Linear(self.n_embd, 2 * self.n_heads_short * self.short_heads_dim, bias=config.bias)
             self.v_short = nn.Linear(self.n_embd, self.n_heads_short * self.head_dim, bias=config.bias)
@@ -166,7 +167,7 @@ class CausalSelfAttention(nn.Module):
             i_idx = torch.arange(T).unsqueeze(1)
             j_idx = torch.arange(T).unsqueeze(0)
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
-            return mask.to(dtype=self.config.dtype) * torch.finfo(self.config.dtype).min 
+            return mask.to(dtype=self.dtype) * torch.finfo(self.dtype).min 
             # return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
     
     def forward(self, x):
