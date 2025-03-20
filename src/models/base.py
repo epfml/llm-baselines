@@ -166,8 +166,8 @@ class CausalSelfAttention(nn.Module):
             i_idx = torch.arange(T).unsqueeze(1)
             j_idx = torch.arange(T).unsqueeze(0)
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
-            # Note: mask should be in float32 to match what F.scaled_dot_product_attention expects for `attn_mask`
-            return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
+            return mask.to(dtype=self.config.dtype) * torch.finfo(self.config.dtype).min #mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
+    
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
@@ -179,6 +179,8 @@ class CausalSelfAttention(nn.Module):
             q_short, k_short = [t.view(B, T, self.n_heads_short, self.short_heads_dim).transpose(1, 2) for t in qk_short]
             v_short = self.v_short(x).view(B, T, self.n_heads_short, self.head_dim).transpose(1, 2)
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+            print(f"Attention mask: {mask_short[:5,0]}")
+            print(f"type mask: {type(mask_short[0,0])}")
             y_short = F.scaled_dot_product_attention(q_short, k_short, v_short, attn_mask=mask_short, dropout_p=self.dropout, is_causal=mask_short is None)
 
         y_long = None
