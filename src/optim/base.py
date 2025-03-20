@@ -98,12 +98,10 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
             
         for microstep_idx in range(acc_steps):  # gradient accumulation
             x, y = get_batch(data_train_iter, device=extra_args.device)
-            if microstep_idx == 0:
-                print(f'_______________batch shape: {x.shape}')
             
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    print(f'__with_distrbtd___batch shape: {x.shape}')
+                    
                     outputs = model(x, targets=y)
 
             loss = outputs['loss'] / acc_steps
