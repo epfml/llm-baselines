@@ -115,6 +115,8 @@ class LlamaAttention(CausalSelfAttention):
 
             # Short-range attention
             mask_short = self.mask_short[:T, :T] if self.context_short < T else None
+            print(f"Attention short mask: {mask_short[:5,0]}")
+            print(f"type mask short: {type(mask_short[0,0])}")
             y_short = F.scaled_dot_product_attention(
                 q_short, k_short, v_short, attn_mask=mask_short,
                 dropout_p=self.attn_dropout.p, is_causal=mask_short is None
@@ -135,6 +137,8 @@ class LlamaAttention(CausalSelfAttention):
 
             # Long-range attention
             mask_long = self.mask_long[:T, :T] if self.context_long < T else None
+            print(f"Attention long mask: {mask_long[:5,0]}")
+            print(f"type mask long: {type(mask_long[0,0])}")
             y_long = F.scaled_dot_product_attention(
                 q_long, k_long, v_long, attn_mask=mask_long,
                 dropout_p=self.attn_dropout.p, is_causal=mask_long is None
