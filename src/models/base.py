@@ -166,8 +166,8 @@ class CausalSelfAttention(nn.Module):
             i_idx = torch.arange(T).unsqueeze(1)
             j_idx = torch.arange(T).unsqueeze(0)
             mask = ((i_idx - j_idx) < 0) | ((i_idx - j_idx) >= context_window)
-            # return mask.to(dtype=self.config.dtype) * torch.finfo(self.config.dtype).min 
-            return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
+            return mask.to(dtype=self.config.dtype) * torch.finfo(self.config.dtype).min 
+            # return mask.float() * torch.finfo(torch.float32).min  # shape: (T, T)
     
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
