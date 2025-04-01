@@ -91,7 +91,8 @@ def get_fineweb_edu_small(num_proc=40, max_examples=None):
 
         # Add 'date' column if missing
         if "date" not in dataset.column_names:
-            dataset = dataset.map(lambda x: {"date": ""}, remove_columns=[], desc="Patching 'date' column")
+            dataset = dataset.map(lambda x: {**x, "date": ""}, desc="Patching 'date' column")
+
 
         # Optional: Limit dataset size
         if max_examples:
