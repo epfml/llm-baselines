@@ -16,6 +16,11 @@ def get_fineweb_edu_small(num_proc=40):
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
         dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")
 
+        # PATCH: Add dummy "date" column if it's missing
+        if "date" not in dataset["train"].column_names:
+            dataset = dataset.map(lambda x: {**x, "date": ""})
+
+
         split_dataset = dataset["train"].train_test_split(
             test_size=0.0005, seed=2357, shuffle=True
         )
