@@ -76,27 +76,29 @@ import os
 FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
 tknzr = tiktoken.get_encoding("gpt2")
 
-def get_fineweb_edu_small(num_proc=40, max_examples=500_000):  # or however much RAM you can afford
+def get_fineweb_edu_small(num_proc=40, max_examples=500_000):
     if not os.path.exists(os.path.join(FWEDU_DATA_PATH, "train.bin")):
         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
-        print("Downloading and streaming FineWeb-Edu dataset from HuggingFace...")
-        dataset_iter = load_dataset("HuggingFaceFW/fineweb-edu", "default", streaming=True, trust_remote_code=True)["train"]
+        print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
+        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", trust_remote_code=True)
+        dataset = dataset["train"]
 
-        # Convert part of the streaming dataset into list
-        print(f"Taking first {max_examples} examples...")
-        dataset_list = list(dataset_iter.take(max_examples))
-        dataset = Dataset.from_list(dataset_list)
+        # Patch missing 'date' column manually, before train/test split
+        def add_missing_columns(example):
+            if "date" not in example:
+                example["date"] = ""
+            return example
 
-        # PATCH: Add dummy "date" column if missing
-        if "date" not in dataset.column_names:
-            dataset = dataset.map(lambda x: {**x, "date": ""})
+        dataset = dataset.map(add_missing_columns)
 
-        # Train-val split
+        # Sample if needed (optional)
+        if max_examples:
+            dataset = dataset.select(range(min(len(dataset), max_examples)))
+
         split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
         split_dataset["val"] = split_dataset.pop("test")
 
-        # Tokenization
         def process(example):
             ids = tknzr.encode_ordinary(example["text"])
             ids.append(tknzr.eot_token)
@@ -109,7 +111,6 @@ def get_fineweb_edu_small(num_proc=40, max_examples=500_000):  # or however much
             num_proc=num_proc,
         )
 
-        # Write .bin files
         for split, dset in tokenized.items():
             arr_len = np.sum(dset["len"])
             filename = os.path.join(FWEDU_DATA_PATH, f"{split}.bin")
