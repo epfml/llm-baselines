@@ -70,29 +70,30 @@
 from tqdm import tqdm
 import numpy as np
 import tiktoken
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
 import os
 
 FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
 tknzr = tiktoken.get_encoding("gpt2")
 
-def get_fineweb_edu_small(num_proc=40, max_examples=500_000):
+def get_fineweb_edu_small(num_proc=40, max_examples=None):
     if not os.path.exists(os.path.join(FWEDU_DATA_PATH, "train.bin")):
         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
-        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", trust_remote_code=True)
+        dataset = load_dataset(
+            "HuggingFaceFW/fineweb-edu",
+            "default",
+            trust_remote_code=True,
+            features=None  # <--- prevent auto-casting to a schema
+        )
         dataset = dataset["train"]
 
-        # Patch missing 'date' column manually, before train/test split
-        def add_missing_columns(example):
-            if "date" not in example:
-                example["date"] = ""
-            return example
+        # Add 'date' column if missing
+        if "date" not in dataset.column_names:
+            dataset = dataset.map(lambda x: {"date": ""}, remove_columns=[], desc="Patching 'date' column")
 
-        dataset = dataset.map(add_missing_columns)
-
-        # Sample if needed (optional)
+        # Optional: Limit dataset size
         if max_examples:
             dataset = dataset.select(range(min(len(dataset), max_examples)))
 
@@ -130,5 +131,4 @@ def get_fineweb_edu_small(num_proc=40, max_examples=500_000):
 
     train_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r")
     val_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r")
-
     return {"train": train_data, "val": val_data}
