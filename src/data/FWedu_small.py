@@ -14,7 +14,9 @@ def get_fineweb_edu_small(num_proc=40):
         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
-        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")
+        # dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")
+        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", trust_remote_code=True, features=None)
+
 
         # PATCH: Add dummy "date" column if it's missing
         if "date" not in dataset["train"].column_names:
