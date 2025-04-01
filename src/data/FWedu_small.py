@@ -85,8 +85,11 @@ def get_fineweb_edu_small(num_proc=40, max_examples=None):
             "HuggingFaceFW/fineweb-edu",
             "default",
             trust_remote_code=True,
-            features=None  # <--- prevent auto-casting to a schema
+            features=None,
+            keep_in_memory=True,
+            cast=False  # <--- This is what actually prevents the schema cast
         )
+
         dataset = dataset["train"]
 
         # Add 'date' column if missing
