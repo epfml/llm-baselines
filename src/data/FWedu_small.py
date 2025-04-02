@@ -232,8 +232,9 @@ def get_fineweb_edu_small(num_proc=40, max_examples=1000000):
             "HuggingFaceFW/fineweb-edu",
             "default",
             streaming=True,
-            trust_remote_code=True,
+            trust_remote_code=True,  # OK
         )["train"]
+
 
         dataset = list(dataset_iter.take(max_examples))  # streaming returns generator
 
@@ -248,6 +249,7 @@ def get_fineweb_edu_small(num_proc=40, max_examples=1000000):
             ids = tknzr.encode_ordinary(text)
             ids.append(tknzr.eot_token)
             return {"ids": ids, "len": len(ids)}
+
 
         tokenized = split_dataset.map(
             process,
