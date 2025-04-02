@@ -3,6 +3,8 @@ import numpy as np
 import tiktoken
 from datasets import load_dataset
 import os
+from datasets import Features, Value
+
 
 FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
 tknzr = tiktoken.get_encoding("gpt2")
@@ -13,7 +15,12 @@ def get_fineweb_edu_small(num_proc=40):
 
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
         # dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")["train"]
-        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", keep_in_memory=True)["train"]
+        features = Features({
+            "text": Value("string"),
+        })
+
+        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", keep_in_memory=True, features=features)["train"]
+
         dataset = dataset.select_columns(["text"])  # or .remove_columns([...])
 
         # Split into train/val
