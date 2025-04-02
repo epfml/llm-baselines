@@ -67,74 +67,74 @@
 
 #     return {"train": train_data, "val": val_data}
 
-from tqdm import tqdm
-import numpy as np
-import tiktoken
-from datasets import load_dataset
-import os
+# from tqdm import tqdm
+# import numpy as np
+# import tiktoken
+# from datasets import load_dataset
+# import os
 
-FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
-tknzr = tiktoken.get_encoding("gpt2")
+# FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
+# tknzr = tiktoken.get_encoding("gpt2")
 
-def get_fineweb_edu_small(num_proc=40, max_examples=10000):
-    if not os.path.exists(os.path.join(FWEDU_DATA_PATH, "train.bin")):
-        os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
+# def get_fineweb_edu_small(num_proc=40, max_examples=10000):
+#     if not os.path.exists(os.path.join(FWEDU_DATA_PATH, "train.bin")):
+#         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
-        print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
-        dataset_iter = load_dataset(
-            "HuggingFaceFW/fineweb-edu",
-            "default",
-            streaming=True,
-            trust_remote_code=True,
-        )["train"]
+#         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
+#         dataset_iter = load_dataset(
+#             "HuggingFaceFW/fineweb-edu",
+#             "default",
+#             streaming=True,
+#             trust_remote_code=True,
+#         )["train"]
 
-        # Convert to a list of dicts
-        dataset = list(dataset_iter.take(max_examples))
+#         # Convert to a list of dicts
+#         dataset = list(dataset_iter.take(max_examples))
 
-        # Add 'date' column if missing
-        for example in dataset:
-            if "date" not in example:
-                example["date"] = ""
+#         # Add 'date' column if missing
+#         for example in dataset:
+#             if "date" not in example:
+#                 example["date"] = ""
 
-        # Use HF Dataset interface for convenience
-        import datasets
-        dataset = datasets.Dataset.from_list(dataset)
+#         # Use HF Dataset interface for convenience
+#         import datasets
+#         dataset = datasets.Dataset.from_list(dataset)
 
-        split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
-        split_dataset["val"] = split_dataset.pop("test")
+#         split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
+#         split_dataset["val"] = split_dataset.pop("test")
 
-        def process(example):
-            ids = tknzr.encode_ordinary(example["text"])
-            ids.append(tknzr.eot_token)
-            return {"ids": ids, "len": len(ids)}
+#         def process(example):
+#             ids = tknzr.encode_ordinary(example["text"])
+#             ids.append(tknzr.eot_token)
+#             return {"ids": ids, "len": len(ids)}
 
-        tokenized = split_dataset.map(
-            process,
-            remove_columns=["text"],
-            desc="Tokenizing the splits",
-            num_proc=num_proc,
-        )
+#         tokenized = split_dataset.map(
+#             process,
+#             remove_columns=["text"],
+#             desc="Tokenizing the splits",
+#             num_proc=num_proc,
+#         )
 
-        for split, dset in tokenized.items():
-            arr_len = np.sum(dset["len"])
-            filename = os.path.join(FWEDU_DATA_PATH, f"{split}.bin")
-            dtype = np.uint16
-            arr = np.memmap(filename, dtype=dtype, mode="w+", shape=(arr_len,))
-            total_batches = min(1024, len(dset))
+#         for split, dset in tokenized.items():
+#             arr_len = np.sum(dset["len"])
+#             filename = os.path.join(FWEDU_DATA_PATH, f"{split}.bin")
+#             dtype = np.uint16
+#             arr = np.memmap(filename, dtype=dtype, mode="w+", shape=(arr_len,))
+#             total_batches = min(1024, len(dset))
 
-            idx = 0
-            for batch_idx in tqdm(range(total_batches), desc=f"Writing {filename}"):
-                batch = dset.shard(
-                    num_shards=total_batches, index=batch_idx, contiguous=True
-                ).with_format("numpy")
-                arr_batch = np.concatenate(batch["ids"])
-                arr[idx : idx + len(arr_batch)] = arr_batch
-                idx += len(arr_batch)
-            arr.flush()
+#             idx = 0
+#             for batch_idx in tqdm(range(total_batches), desc=f"Writing {filename}"):
+#                 batch = dset.shard(
+#                     num_shards=total_batches, index=batch_idx, contiguous=True
+#                 ).with_format("numpy")
+#                 arr_batch = np.concatenate(batch["ids"])
+#                 arr[idx : idx + len(arr_batch)] = arr_batch
+#                 idx += len(arr_batch)
+#             arr.flush()
 
-    train_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r")
-    val_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r")
-    return {"train": train_data, "val": val_data}
+#     train_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r")
+#     val_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r")
+#     return {"train": train_data, "val": val_data}
 
   
 # from tqdm import tqdm
@@ -278,3 +278,57 @@ def get_fineweb_edu_small(num_proc=40, max_examples=10000):
 #     train_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r")
 #     val_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r")
 #     return {"train": train_data, "val": val_data}
+
+
+from tqdm import tqdm
+import numpy as np
+import tiktoken
+from datasets import load_dataset
+import os
+
+FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
+tknzr = tiktoken.get_encoding("gpt2")
+
+def get_fineweb_edu_small(num_proc=40):
+    if not os.path.exists(os.path.join(FWEDU_DATA_PATH, "train.bin")):
+        os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
+
+        print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
+        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")["train"]
+
+        # Split into train/val
+        split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
+        split_dataset["val"] = split_dataset.pop("test")
+
+        def process(example):
+            ids = tknzr.encode_ordinary(example["text"])
+            ids.append(tknzr.eot_token)
+            return {"ids": ids, "len": len(ids)}
+
+        tokenized = split_dataset.map(
+            process,
+            remove_columns=["text"],
+            desc="Tokenizing the splits",
+            num_proc=num_proc,
+        )
+
+        for split, dset in tokenized.items():
+            arr_len = np.sum(dset["len"])
+            filename = os.path.join(FWEDU_DATA_PATH, f"{split}.bin")
+            dtype = np.uint16
+            arr = np.memmap(filename, dtype=dtype, mode="w+", shape=(arr_len,))
+            total_batches = min(1024, len(dset))
+
+            idx = 0
+            for batch_idx in tqdm(range(total_batches), desc=f"Writing {filename}"):
+                batch = dset.shard(
+                    num_shards=total_batches, index=batch_idx, contiguous=True
+                ).with_format("numpy")
+                arr_batch = np.concatenate(batch["ids"])
+                arr[idx : idx + len(arr_batch)] = arr_batch
+                idx += len(arr_batch)
+            arr.flush()
+
+    train_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r")
+    val_data = np.memmap(os.path.join(FWEDU_DATA_PATH, "val.bin"), dtype=np.uint16, mode="r")
+    return {"train": train_data, "val": val_data}
