@@ -17,20 +17,17 @@ def get_fineweb_edu_small(num_proc=40, max_examples=100_000):
             split="train",
             streaming=True,
             trust_remote_code=True,
-        ).with_format("python")  # Important: skip Arrow casting
+        ).with_format("python")  # ← forces return of plain dicts, not Arrow tables
 
-        # Take a few examples and pad missing fields like "date"
-        raw_list = []
+        data = []
         for i, example in enumerate(raw_stream):
             if i >= max_examples:
                 break
             if "date" not in example:
                 example["date"] = ""
-            raw_list.append(example)
+            data.append(example)
 
-        print(f"Collected {len(raw_list)} examples.")
-
-        dataset = Dataset.from_list(raw_list)
+        dataset = Dataset.from_list(data)
 
         split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
         split_dataset["val"] = split_dataset.pop("test")
