@@ -142,6 +142,7 @@ import numpy as np
 import tiktoken
 from datasets import load_dataset, Dataset
 import os
+from datasets import Features, Value
 
 FWEDU_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/fineweb_edu_small/")
 tknzr = tiktoken.get_encoding("gpt2")
@@ -151,10 +152,25 @@ def get_fineweb_edu_small(num_proc=40):
         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
+        features = Features({
+            "text": Value("string"),
+            "id": Value("string"),
+            "dump": Value("string"),
+            "url": Value("string"),
+            "date": Value("string"),  # Force inclusion of 'date'
+            "file_path": Value("string"),
+            "language": Value("string"),
+            "language_score": Value("float64"),
+            "token_count": Value("int64"),
+            "score": Value("float64"),
+            "int_score": Value("int64"),
+        })
+
         dataset = load_dataset(
             "HuggingFaceFW/fineweb-edu",
             "default",
-            trust_remote_code=True
+            features=features,
+            trust_remote_code=True,
         )["train"]
 
         # Add 'date' column if missing
