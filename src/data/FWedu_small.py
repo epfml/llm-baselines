@@ -12,7 +12,9 @@ def get_fineweb_edu_small(num_proc=40):
         os.makedirs(FWEDU_DATA_PATH, exist_ok=True)
 
         print("Downloading and loading FineWeb-Edu dataset from HuggingFace...")
-        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")["train"]
+        # dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default")["train"]
+        dataset = load_dataset("HuggingFaceFW/fineweb-edu", "default", keep_in_memory=True)["train"]
+        dataset = dataset.select_columns(["text"])  # or .remove_columns([...])
 
         # Split into train/val
         split_dataset = dataset.train_test_split(test_size=0.0005, seed=2357, shuffle=True)
