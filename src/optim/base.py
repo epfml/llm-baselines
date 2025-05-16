@@ -61,6 +61,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     model.train()
 
     t0 = time.time()
+    total_tokens = 0
     
     if rng_state_dict is not  None:
         torch.set_rng_state(rng_state_dict["cpu_rng_state"])
@@ -116,6 +117,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     24 if itr < iterations else len(data["val"])
                 )
                 
+                elapsed_time = time.time() - t0
+                
                 if itr % eval_freq:
                     val_acc, val_loss, val_perplexity = eval(
                         model,
@@ -124,7 +127,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         max_num_batches=eval_steps,
                         ctx=type_ctx,
                     )
-                    print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                    print_string = f"Time: {elapsed_time} {epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                    
                     
                     if extra_args.wandb:
                         logs = {
@@ -153,10 +157,11 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                             # why a copy? see github.com/wandb/wandb/issues/2981
                             wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)})
                 else:
-                    print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f}"
+                    print_string = f"Time: {elapsed_time} {epoch}/{itr} [train] loss={train_loss:.3f}"
 
                 tokens = 20 * batch_size * sequence_length * acc_steps
-                print_string += f" [tokens per second] {tokens/dt:.2f}"
+                total_tokens+=tokens
+                print_string += f" [tokens per second] {tokens/dt:.2f} [total tokens] {total_tokens}"
                 if scheduler is not None:
                     print_string += f" [lr] {{:.2e}}".format(current_lr)
                 print(print_string)
