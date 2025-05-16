@@ -27,18 +27,18 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--results_base_folder', default="./exps", type=str) 
     parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
     # Dataset params
-    parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
+    parser.add_argument('--dataset', default='mathqa', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2', 'mathqa'])
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
     parser.add_argument('--model', default='base', choices=['base', 'llama2'])
     parser.add_argument('--use_pretrained', default="auto", type=none_or_str) # 'none', 'gpt-2' or a path to the pretraind model
     parser.add_argument('--dropout', default=0.0, type=float)
-    parser.add_argument('--n_head', default=12, type=int)
-    parser.add_argument('--n_layer', default=12, type=int) # depths in att + ff blocks
+    parser.add_argument('--n_head', default=6, type=int)
+    parser.add_argument('--n_layer', default=6, type=int) # depths in att + ff blocks
     parser.add_argument('--n_embd', default=768, type=int) # embedding size / hidden size ... 
     parser.add_argument('--sequence_length', default=512, type=int)
-    parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
+    parser.add_argument('--dtype', default=torch.float16, type=torch.dtype)
     parser.add_argument('--bias', default=False, type=bool)
     parser.add_argument('--compile', action='store_true') # if true then model is compiled 
     parser.add_argument("--rmsnorm_eps", default=1e-5, type=float)
