@@ -12,6 +12,11 @@ import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
+def format_elapsed(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     torch.set_float32_matmul_precision('high')
@@ -60,6 +65,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
     model.train()
 
+    start_time = time.time()
     t0 = time.time()
     total_tokens = 0
     
@@ -117,7 +123,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                     24 if itr < iterations else len(data["val"])
                 )
                 
-                elapsed_time = time.time() - t0
+                elapsed_time = time.time() - start_time
                 
                 if itr % eval_freq:
                     val_acc, val_loss, val_perplexity = eval(
@@ -127,7 +133,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                         max_num_batches=eval_steps,
                         ctx=type_ctx,
                     )
-                    print_string = f"Time: {elapsed_time} {epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
+                    print_string = f"Time: {format_elapsed(elapsed_time)} {epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
                     
                     
                     if extra_args.wandb:
@@ -157,7 +163,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                             # why a copy? see github.com/wandb/wandb/issues/2981
                             wandb.log({f"generated-text-{wandb.run.name}": copy.copy(text_table)})
                 else:
-                    print_string = f"Time: {elapsed_time} {epoch}/{itr} [train] loss={train_loss:.3f}"
+                    print_string = f"Time: {format_elapsed(elapsed_time)} {epoch}/{itr} [train] loss={train_loss:.3f}"
 
                 tokens = 20 * batch_size * sequence_length * acc_steps
                 total_tokens+=tokens

@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from models.base import CausalSelfAttention, GPTBase
+import torchtune
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -90,6 +91,8 @@ class LlamaMLP(nn.Module):
 
 
 class LlamaAttention(CausalSelfAttention):
+    def __init__(self, config):
+        self.rpe = torchtune.modules.RotaryPositionalEmbeddings(self.n_embd, config.sequence_length)
     def forward(self, x, freqs_cis):
         # batch size, sequence length, embedding dimensionality (n_embd)
         (
@@ -103,7 +106,10 @@ class LlamaAttention(CausalSelfAttention):
         # (B, T, nh, hs)
         k = k.view(B, T, self.n_head, C // self.n_head)
         q = q.view(B, T, self.n_head, C // self.n_head)
-        q, k = apply_rotary_emb(q, k, freqs_cis)
+
+        #q, k = apply_rotary_emb(q, k, freqs_cis)
+        q = self.rpe(q)
+        k = self.rpe(k)
         # (B, nh, T, hs)
         q, k = q.transpose(1, 2), k.transpose(1, 2)
 
@@ -135,9 +141,9 @@ class LlamaAttention(CausalSelfAttention):
 class LlamaBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_1 = torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps) #RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
-        self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_2 = torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
@@ -163,7 +169,7 @@ class Llama(GPTBase):
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
-                ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
+                ln_f=torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
             )
         )
 
