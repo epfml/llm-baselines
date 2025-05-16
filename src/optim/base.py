@@ -126,7 +126,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 tokens = eval_freq* batch_size * sequence_length* acc_steps
                 print_string += f" [tokens per second] {tokens/dt:.2f}ms"
                 if scheduler is not None:
-                    print_string += f" [lr] {current_lr:.5f}"
+                    print_string += f" [lr] {"{:.2e}".format(current_lr)}"
                 print(print_string)
 
                 if extra_args.wandb:
