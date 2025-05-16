@@ -16,7 +16,7 @@ from .utils import eval, get_batch, save_checkpoint
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
     type_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(
-        device_type=device_type, dtype=torch.float16)  # extra_args.dtype)
+        device_type=device_type, dtype=torch.float16)  # extra_args.dtype) #TODO: bfloat16
     best_val_loss, text_table = float('inf'), None # best_val_loss not used atm, early stopping not recommended but possible 
     substep = itr * acc_steps
     data["train"], train_sampler = get_dataloader(
@@ -77,7 +77,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
             
             with type_ctx:
                 with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    outputs = model(x, targets=y)
+                    outputs = model(x, targets=y) #TODO: switch to non-distributed backend
 
             loss = outputs['loss'] / acc_steps
             loss.backward()
@@ -123,7 +123,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
                 )
 
                 print_string = f"{epoch}/{itr} [train] loss={train_loss:.3f} [val] loss={val_loss:.3f}, pp={val_perplexity:.2f}, acc={val_acc:3f}"
-                print_string += f" [time per itr] {dt*1000/eval_freq:.2f}ms"
+                tokens = eval_freq* batch_size * sequence_length* acc_steps
+                print_string += f" [tokens per second] {tokens/dt:.2f}ms"
                 if scheduler is not None:
                     print_string += f" [lr] {current_lr:.5f}"
                 print(print_string)
