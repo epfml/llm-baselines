@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from models.base import CausalSelfAttention, GPTBase
+import torchtune
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -90,6 +91,8 @@ class LlamaMLP(nn.Module):
 
 
 class LlamaAttention(CausalSelfAttention):
+    def __init__(self, config):
+        self.rpe = torchtune.modules.RotaryPositionalEmbeddings(self.n_embd, config.sequence_length)
     def forward(self, x, freqs_cis):
         # batch size, sequence length, embedding dimensionality (n_embd)
         (
@@ -103,7 +106,10 @@ class LlamaAttention(CausalSelfAttention):
         # (B, T, nh, hs)
         k = k.view(B, T, self.n_head, C // self.n_head)
         q = q.view(B, T, self.n_head, C // self.n_head)
-        q, k = apply_rotary_emb(q, k, freqs_cis)
+
+        #q, k = apply_rotary_emb(q, k, freqs_cis)
+        q = self.rpe(q)
+        k = self.rpe(k)
         # (B, nh, T, hs)
         q, k = q.transpose(1, 2), k.transpose(1, 2)
 
