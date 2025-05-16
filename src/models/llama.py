@@ -135,9 +135,9 @@ class LlamaAttention(CausalSelfAttention):
 class LlamaBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_1 = torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps) #RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
-        self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_2 = torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
@@ -163,7 +163,7 @@ class Llama(GPTBase):
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
-                ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
+                ln_f=torch.nn.RMSNorm(config.n_membd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
             )
         )
 
