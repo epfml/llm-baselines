@@ -40,7 +40,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--sequence_length', default=1024, type=int)
     parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
     parser.add_argument('--bias', default=False, type=bool)
-    parser.add_argument('--compile', default=True, action='store_true') # if true then model is compiled 
+    parser.add_argument('--compile', action='store_true') # if true then model is compiled 
     parser.add_argument("--rmsnorm_eps", default=1e-5, type=float)
     parser.add_argument(
         "--multiple_of",  # make SwiGLU hidden layer size multiple of large power of 2

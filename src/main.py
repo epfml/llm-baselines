@@ -26,7 +26,7 @@ def get_args():
 
 
 def main(args): 
-
+    # torch._dynamo.config.suppress_errors = True
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
 

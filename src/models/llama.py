@@ -21,8 +21,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from models.base import CausalSelfAttention, GPTBase
-import torchtune
-
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
@@ -56,7 +54,6 @@ def apply_rotary_emb(q, k, freqs_cis):
     xq_out = torch.view_as_real(q_ * freqs_cis).flatten(3)
     xk_out = torch.view_as_real(k_ * freqs_cis).flatten(3)
     return xq_out.type_as(q), xk_out.type_as(k)
-
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -94,9 +91,9 @@ class LlamaAttention(CausalSelfAttention):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
-        self.rpe = torchtune.modules.RotaryPositionalEmbeddings(config.n_embd//config.n_head, config.sequence_length)
+        # self.rpe = torchtune.modules.RotaryPositionalEmbeddings(config.n_embd//config.n_head, config.sequence_length)
         
-    def forward(self, x):
+    def forward(self, x, freqs_cis):
         # batch size, sequence length, embedding dimensionality (n_embd)
         (
             B,
@@ -110,9 +107,9 @@ class LlamaAttention(CausalSelfAttention):
         k = k.view(B, T, self.n_head, C // self.n_head)
         q = q.view(B, T, self.n_head, C // self.n_head)
 
-        #q, k = apply_rotary_emb(q, k, freqs_cis)
-        q = self.rpe(q)
-        k = self.rpe(k)
+        q, k = apply_rotary_emb(q, k, freqs_cis)
+        # q = self.rpe(q)
+        # k = self.rpe(k)
         # (B, nh, T, hs)
         q, k = q.transpose(1, 2), k.transpose(1, 2)
 
@@ -144,13 +141,13 @@ class LlamaAttention(CausalSelfAttention):
 class LlamaBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = torch.nn.RMSNorm(config.n_embd, eps=config.rmsnorm_eps) #RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_1 = torch.nn.RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
-        self.ln_2 = torch.nn.RMSNorm(config.n_embd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_2 = torch.nn.RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.mlp = LlamaMLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, freqs_cis):
+        x = x + self.attn(self.ln_1(x), freqs_cis)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -165,13 +162,14 @@ class Llama(GPTBase):
 
         # create the token and position embeddings
         self.head_dim = config.n_embd // config.n_head
+        self.freqs_cis = precompute_freqs_cis(self.head_dim, config.sequence_length)
 
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
-                ln_f=torch.nn.RMSNorm(config.n_embd, eps=config.rmsnorm_eps)#RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
+                ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
             )
         )
 
@@ -216,9 +214,10 @@ class Llama(GPTBase):
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
         x = self.transformer.drop(tok_emb)
+        freqs_cis = self.freqs_cis.to(x.device)[pos]
 
         for block_idx, block in enumerate(self.transformer.h):
-            x = block(x)
+            x = block(x, freqs_cis)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
