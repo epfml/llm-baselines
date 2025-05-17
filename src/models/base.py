@@ -228,6 +228,8 @@ class GPTBase(nn.Module):
                 if pn.endswith("bias"):
                     # all biases will not be decayed
                     no_decay.add(fpn)
+                elif "ln_" in pn and pn.endswith("weight"):
+                    no_decay.add(fpn)
                 elif pn.endswith("weight") and isinstance(m, whitelist_weight_modules):
                     # weights of whitelist modules will be weight decayed
                     decay.add(fpn)
@@ -241,12 +243,18 @@ class GPTBase(nn.Module):
         # will only return the first occurence, key'd by 'transformer.wte.weight', below.
         # so let's manually remove 'lm_head.weight' from decay set. This will include
         # this tensor into optimization via transformer.wte.weight only, and not decayed.
-        decay.remove("lm_head.weight")
+        if "lm_head.weight" in decay:
+            decay.remove("lm_head.weight")
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}
         inter_params = decay & no_decay
         union_params = decay | no_decay
+        
+        uncategorized = param_dict.keys() - union_params
+        if uncategorized:
+                print(f"Uncategorized parameters: {uncategorized}")
+                
         assert (
             len(inter_params) == 0
         ), "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
