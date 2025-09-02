@@ -31,7 +31,7 @@ The above command trains a 123.59M parameters model with the Llama-style archite
 
 ## Reproducibility
 
-We [present]() scripts for reproducing our benchmarking results for 124M, 210M, 720M dense Llama-based models, and 520M MoEs.
+We [present](https://github.com/epfml/llm-optimizer-benchmark/tree/dev/scripts) scripts for reproducing our benchmarking results for 124M, 210M, 720M dense Llama-based models, and 520M MoEs.
 Set the [wandb logging](README.md#using-wandb) and run those scripts to obtain the results as below.
 
 <p align="center">
@@ -39,6 +39,7 @@ Set the [wandb logging](README.md#using-wandb) and run those scripts to obtain t
   <img src="assets/720m_losses_2.png" alt="Prod, ADOPT, SOAP, AdamW" width="30%" style="display:inline-block; margin: 5px;"/>
   <img src="assets/720m_losses_3.png" alt="Top 3" width="30%" style="display:inline-block; margin: 5px;"/>
 </p>
+
 **Figure:** results for 720M Llama-style models trained with a batch size of 1M tokens.
 
 <p align="center">
@@ -46,6 +47,7 @@ Set the [wandb logging](README.md#using-wandb) and run those scripts to obtain t
   <img src="assets/moe_losses_2.png" alt="Lion, Prod, AdamW, ADOPT" width="30%" style="display:inline-block; margin: 5px;"/>
   <img src="assets/moe_losses_3.png" alt="Top 3 MoE" width="30%" style="display:inline-block; margin: 5px;"/>
 </p>
+
 **Figure:** results for 520M MoE models trained with a batch size of 130k tokens.
 
 ## Less quick start
