@@ -1,3 +1,5 @@
+#!/bin/bash
+
 torchrun --nproc_per_node=1 ./src/main.py --config_format base --model llama --distributed_backend nccl \
     --n_embd 768 --n_head 12 --n_layer 12 --moe \
     --batch_size 64 --sequence_length 512 --acc_steps 4 \
