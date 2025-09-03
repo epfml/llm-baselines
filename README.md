@@ -1,4 +1,6 @@
 # Codebase: "Benchmarking Optimizers for Large Language Model Pretraining"
+[![arXiv](https://img.shields.io/badge/arXiv-2401.06766-b31b1b.svg)](https://arxiv.org/abs/2509.01440)
+[![BibTeX](https://img.shields.io/badge/BibTeX-Citation-green)](https://arxiv.org/bibtex/2509.01440)
 
 The code is largely based on our framework [llm-baselines](https://github.com/epfml/llm-baselines) to do research on training LLMs as an extension of [nanoGPT](https://github.com/karpathy/nanogpt).
 
