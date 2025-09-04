@@ -1,0 +1,11 @@
+tiktoken
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch
+torchaudio
+torchvision
+tqdm
+transformers
+wandb
+datasets
+zstandard
+numpy==1.22.4
