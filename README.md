@@ -44,7 +44,7 @@ parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd','muon','muonema'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT

@@ -1,23 +1,37 @@
-import os
-import math
-import torch
-from loguru import logger
-from datasets import load_dataset
-from torch.utils.data import DataLoader, Dataset
-from transformers import (
-    Qwen2Config,
-    Qwen2ForCausalLM,
-    Qwen2Tokenizer,
-    get_cosine_schedule_with_warmup,
-)
-from tqdm import tqdm
+# mypy: allow-untyped-defs
+# mypy: disable-error-code=arg-type
+"""Implementation of the Muon optimizer."""
 
-# Muon implementation taken is taken from 
-# https://github.com/MoonshotAI/Moonlight/blob/master/examples/toy_train.py
-# This code snippet is a modified version adapted from the following GitHub repository:
-# https://github.com/KellerJordan/Muon/blob/master/muon.py
-@torch.compile
-def zeropower_via_newtonschulz5(G, steps):
+import math
+from collections.abc import MutableMapping
+from typing import Optional
+
+import torch
+from torch import Tensor
+
+from .optimizer import (
+    _disable_dynamo_if_unsupported,
+    _params_doc,
+    _to_scalar,
+    Optimizer,
+    ParamsT,
+)
+
+
+__all__ = ["Muon"]
+
+# Constants from Keller Jordan's Muon post: https://kellerjordan.github.io/posts/muon/
+# github permlink: https://github.com/KellerJordan/Muon/blob/f90a42b28e00b8d9d2d05865fe90d9f39abcbcbd/muon.py#L16
+EPS = 1e-7
+DEFAULT_A = 3.4445
+DEFAULT_B = -4.7750
+DEFAULT_C = 2.0315
+DEFAULT_NS_STEPS = 5
+
+
+def _zeropower_via_newtonschulz(
+    grad: Tensor, ns_coefficients: tuple[float, float, float], ns_steps: int, eps: float
+) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
@@ -26,185 +40,323 @@ def zeropower_via_newtonschulz5(G, steps):
     on the interval. This iteration therefore does not produce UV^T but rather something like US'V^T
     where S' is diagonal with S_{ii}' ~ Uniform(0.5, 1.5), which turns out not to hurt model
     performance at all relative to UV^T, where USV^T = G is the SVD.
+
+    Implementation reference: https://github.com/KellerJordan/Muon/blob/master/muon.py
+    with suggestions by @jxbz, @leloykun, and @YouJiacheng.
     """
-    assert len(G.shape) == 2
-    a, b, c = (3.4445, -4.7750, 2.0315)
-    X = G.bfloat16()
-    if G.size(0) > G.size(1):
-        X = X.T
+    if ns_steps >= 100:
+        raise ValueError(
+            "Number of steps must be less than 100 for computational efficiency"
+        )
+    if len(grad.shape) != 2:
+        raise ValueError("Input tensor gradient must be a 2D matrix")
+    if len(ns_coefficients) != 3:
+        raise ValueError("Coefficients must be a tuple of exactly 3 values")
+    a, b, c = ns_coefficients
+    ortho_grad = grad.bfloat16()
+    if grad.size(0) > grad.size(1):
+        ortho_grad = ortho_grad.T
     # Ensure spectral norm is at most 1
-    X = X / (X.norm() + 1e-7)
+    ortho_grad.div_(ortho_grad.norm().clamp(min=eps))
     # Perform the NS iterations
-    for _ in range(steps):
-        A = X @ X.T
-        B = (
-            b * A + c * A @ A
-        )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
-        X = a * X + B @ X
+    for _ in range(ns_steps):
+        gram_matrix = ortho_grad @ ortho_grad.T
+        gram_update = torch.addmm(
+            gram_matrix, gram_matrix, gram_matrix, beta=b, alpha=c
+        )
+        ortho_grad = torch.addmm(ortho_grad, gram_update, ortho_grad, beta=a)
 
-    if G.size(0) > G.size(1):
-        X = X.T
-    return X
+    if grad.size(0) > grad.size(1):
+        ortho_grad = ortho_grad.T
+    return ortho_grad
 
 
-class Muon(torch.optim.Optimizer):
-    """
-    Muon - MomentUm Orthogonalized by Newton-schulz
+def _adjust_lr(
+    lr: float, adjust_lr_fn: Optional[str], param_shape: torch.Size
+) -> float:
+    """Default learning rate adjustment used by Muon."""
+    A, B = param_shape[:2]
 
-    Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-
-    processing step, in which each 2D parameter's update is replaced with the nearest orthogonal
-    matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has
-    the advantage that it can be stably run in bfloat16 on the GPU.
+    if adjust_lr_fn is None or adjust_lr_fn == "original":
+        adjusted_ratio = math.sqrt(max(1, A / B))
+    elif adjust_lr_fn == "match_rms_adamw":
+        adjusted_ratio = 0.2 * math.sqrt(max(A, B))
+    else:
+        adjusted_ratio = 1.0
+    return lr * adjusted_ratio
 
-    Some warnings:
-    - We believe this optimizer is unlikely to work well for training with small batch size.
-    - We believe it may not work well for finetuning pretrained models, but we haven't tested this.
 
-    Arguments:
-        muon_params: The parameters to be optimized by Muon.
-        lr: The learning rate. The updates will have spectral norm of `lr`. (0.02 is a good default)
-        momentum: The momentum used by the internal SGD. (0.95 is a good default)
-        nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
-        ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
-        adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
-        {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
-        adamw_lr: The learning rate for the internal AdamW.
-        adamw_betas: The betas for the internal AdamW.
-        adamw_eps: The epsilon for the internal AdamW.
-        adamw_wd: The weight decay for the internal AdamW.
-    """
-
+class Muon(Optimizer):
     def __init__(
         self,
-        lr=1e-3,
-        wd=0.1,
-        muon_params=None,
-        momentum=0.95,
-        nesterov=True,
-        ns_steps=5,
-        adamw_params=None,
-        adamw_betas=(0.9, 0.95),
-        adamw_eps=1e-8,
-    ):
+        params: ParamsT,
+        lr: float = 1e-3,
+        weight_decay: float = 0.1,
+        momentum: float = 0.95,
+        nesterov: bool = True,
+        ns_coefficients: tuple[float, float, float] = (DEFAULT_A, DEFAULT_B, DEFAULT_C),
+        eps: float = EPS,
+        ns_steps: int = DEFAULT_NS_STEPS,
+        adjust_lr_fn: Optional[str] = None,
+    ) -> None:
+        if isinstance(lr, Tensor) and lr.numel() != 1:
+            raise ValueError("Tensor lr must be 1-element")
+        if not 0.0 <= lr:
+            raise ValueError(f"Learning rate should be >= 0 but is: {lr}")
+        if not 0.0 <= momentum:
+            raise ValueError(f"momentum should be >= 0 but is: {momentum}")
+        if not 0.0 <= weight_decay:
+            raise ValueError(f"weight decay should be >= 0 but is: {weight_decay}")
+        if adjust_lr_fn is not None and adjust_lr_fn not in [
+            "original",
+            "match_rms_adamw",
+        ]:
+            raise ValueError(
+                f"Adjust learning rate function {adjust_lr_fn} is not supported"
+            )
 
-        defaults = dict(
-            lr=lr,
-            wd=wd,
-            momentum=momentum,
-            nesterov=nesterov,
-            ns_steps=ns_steps,
-            adamw_betas=adamw_betas,
-            adamw_eps=adamw_eps,
-        )
-
-        params = list(muon_params)
-        adamw_params = list(adamw_params) if adamw_params is not None else []
-        params.extend(adamw_params)
+        defaults = {
+            "lr": lr,
+            "weight_decay": weight_decay,
+            "momentum": momentum,
+            "nesterov": nesterov,
+            "ns_coefficients": ns_coefficients,
+            "eps": eps,
+            "ns_steps": ns_steps,
+            "adjust_lr_fn": adjust_lr_fn,
+        }
         super().__init__(params, defaults)
-        # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
-            assert p.ndim == 2, p.ndim
-            self.state[p]["use_muon"] = True
-        for p in adamw_params:
-            # Do not use Muon for parameters in adamw_params
-            self.state[p]["use_muon"] = False
 
-    def adjust_lr_for_muon(self, lr, param_shape):
-        A, B = param_shape[:2]
-        # We adjust the learning rate and weight decay based on the size of the parameter matrix
-        # as describted in the paper
-        adjusted_ratio = 0.2 * math.sqrt(max(A, B))
-        adjusted_lr = lr * adjusted_ratio
-        return adjusted_lr
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.ndim != 2:
+                    raise ValueError(
+                        f"Muon only supports 2D parameters whereas we found a parameter with size: {p.size()}"
+                    )
 
+    def _init_group(
+        self,
+        group: MutableMapping,
+        params_with_grad: list[Tensor],
+        grads: list[Tensor],
+        muon_momentum_bufs: list[Tensor],
+    ):
+        for p in group["params"]:
+            if p.grad is None:
+                continue
+
+            if torch.is_complex(p):
+                raise RuntimeError("Muon does not support complex parameters")
+            if p.grad.is_sparse:
+                raise RuntimeError("Muon does not support sparse gradients")
+
+            params_with_grad.append(p)
+            grads.append(p.grad)
+
+            state = self.state[p]
+
+            if "momentum_buffer" not in state:
+                state["momentum_buffer"] = torch.zeros_like(
+                    p.grad, memory_format=torch.preserve_format
+                )
+            muon_momentum_bufs.append(state["momentum_buffer"])
+
+        return False  # has_complex
+
+    @torch.no_grad()
     def step(self, closure=None):
-        """Perform a single optimization step.
-
-        Args:
-            closure (Callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
+        """Performs a single optimization step."""
         loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
 
         for group in self.param_groups:
-
-            ############################
-            #           Muon           #
-            ############################
-
-            params = [p for p in group["params"] if self.state[p]["use_muon"]]
-            # import pdb; pdb.set_trace()
             lr = group["lr"]
-            wd = group["wd"]
+            weight_decay = group["weight_decay"]
             momentum = group["momentum"]
 
-            # generate weight updates
-            for p in params:
-                # sanity check
-                g = p.grad
-                if g is None:
-                    continue
-                if g.ndim > 2:
-                    g = g.view(g.size(0), -1)
-                assert g is not None
+            params_with_grad: list[Tensor] = []
+            grads: list[Tensor] = []
+            muon_momentum_bufs: list[Tensor] = []
 
-                # calc update
-                state = self.state[p]
-                if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = torch.zeros_like(g)
-                buf = state["momentum_buffer"]
-                buf.mul_(momentum).add_(g)
-                if group["nesterov"]:
-                    g = g.add(buf, alpha=momentum)
-                else:
-                    g = buf
-                u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+            has_complex = self._init_group(
+                group,
+                params_with_grad,
+                grads,
+                muon_momentum_bufs,
+            )
 
-                # scale update
-                adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)
-
-                # apply weight decay
-                p.data.mul_(1 - lr * wd)
-
-                # apply update
-                p.data.add_(u, alpha=-adjusted_lr)
-
-            ############################
-            #       AdamW backup       #
-            ############################
-
-            params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-            lr = group['lr']
-            beta1, beta2 = group["adamw_betas"]
-            eps = group["adamw_eps"]
-            weight_decay = group["wd"]
-
-            for p in params:
-                g = p.grad
-                if g is None:
-                    continue
-                state = self.state[p]
-                if "step" not in state:
-                    state["step"] = 0
-                    state["moment1"] = torch.zeros_like(g)
-                    state["moment2"] = torch.zeros_like(g)
-                state["step"] += 1
-                step = state["step"]
-                buf1 = state["moment1"]
-                buf2 = state["moment2"]
-                buf1.lerp_(g, 1 - beta1)
-                buf2.lerp_(g.square(), 1 - beta2)
-
-                g = buf1 / (eps + buf2.sqrt())
-
-                bias_correction1 = 1 - beta1**step
-                bias_correction2 = 1 - beta2**step
-                scale = bias_correction1 / bias_correction2**0.5
-                p.data.mul_(1 - lr * weight_decay)
-                p.data.add_(g, alpha=-lr / scale)
-
+            muon(
+                params_with_grad,
+                grads,
+                muon_momentum_bufs,
+                lr=lr,
+                weight_decay=weight_decay,
+                momentum=momentum,
+                nesterov=group["nesterov"],
+                ns_coefficients=group["ns_coefficients"],
+                eps=group["eps"],
+                ns_steps=group["ns_steps"],
+                adjust_lr_fn=group["adjust_lr_fn"],
+                has_complex=has_complex,
+            )
         return loss
+
+
+Muon.__doc__ = (
+    r"""Implements Muon algorithm.
+
+    .. math::
+       \begin{aligned}
+            &\rule{110mm}{0.4pt} \\
+            &\textbf{input}      : \gamma \text{ (lr)},\ \lambda \text{ (weight decay)},\
+               \mu \text{ (momentum)},\ \textit{nesterov}\in\{True,False\},\\
+            &\hspace{13mm}(a,b,c)\ \text{ (NS coefficients)},\
+               \varepsilon \text{ (epsilon)},\ k \text{ (NS steps)},\
+               \theta_0 \text{ (params)},\ f(\theta) \text{ (objective)} \\
+            &\textbf{initialize} : B_0 \leftarrow 0 \text{ (momentum buffer)} \\[-1.ex]
+            &\rule{110mm}{0.4pt} \\
+            &\textbf{for}\ t=1\ \textbf{to}\ \ldots\ \textbf{do} \\[0.25ex]
+            &\hspace{5mm} g_t \leftarrow \nabla_{\theta} f_t(\theta_{t-1}) \\[0.25ex]
+            &\hspace{5mm} B_t \leftarrow \mu B_{t-1} + g_t \\[0.25ex]
+            &\hspace{5mm} \widetilde{B}_t \leftarrow
+                \begin{cases}
+                   g_t + \mu B_t, & \text{if nesterov}=True \\
+                   B_t,           & \text{if nesterov}=False
+                \end{cases} \\[1.0ex]
+            &\hspace{5mm} O_t \leftarrow \mathrm{NS}^{(a,b,c)}_{k}\!\big(\widetilde{B}_t;\ \varepsilon\big) \\[0.5ex]
+            &\hspace{5mm} \theta_t \leftarrow \theta_{t-1} - \gamma\,\lambda\,\theta_{t-1}
+               \quad\text{(decoupled weight decay)} \\[0.25ex]
+
+            &\hspace{5mm} \gamma \leftarrow \mathrm{AdjustLR}\!\big(\gamma;\ \mathrm{shape}\!\big(\theta_t \big) \big) \\[0.25ex]
+            &\hspace{5mm} \theta_t \leftarrow \theta_t - \gamma\, O_t \\
+            &\rule{110mm}{0.4pt} \\[-1.ex]
+            &\mathbf{return}\ \theta_t \\[-1.ex]
+            &\rule{110mm}{0.4pt}s
+       \end{aligned}
+
+    Here, :math:`\mathrm{NS}^{(a,b,c)}_{k}(\cdot;\varepsilon)` denotes :math:`k` iterations of the
+    Newton–Schulz orthogonalization operator parameterized by coefficients :math:`(a,b,c)`
+    with numerical stabilization :math:`\varepsilon`.
+
+    The purpose for :math:`\mathrm{AdjustLR}\!\big(\gamma;\ \mathrm{shape}\!\big(\theta_t \big) \big)`
+    is to make the orthogonalized update have a consistent :math:`RMS` across rectangular matrices.
+
+    Keller's original implementation scales the update by :math:`\sqrt{\max\!\left(1, \frac{A}{B}\right)}`,
+    where :math:`A` and :math:`B` are dimension of the matrix being optimized.
+
+    Moonshot's implementation also focuses on matching :math:`RMS` of AdamW. The adjustment is computed as:
+    :math:`\gamma \leftarrow {0.2}\gamma\,\sqrt{\max\!\left({A}, {B}\right)}`
+    The method is adopted from `Muon is Scalable for LLM Training`_. Research
+    results show that with this adjustment Muon can directly reuse the learning rate
+    and weight decay tuned for AdamW.
+
+    We provide two options for the learning rate adjustment: "original", which follows Keller's
+    implementation, and "match_rms_adamw", which refers to Moonshot's implementation. This gives users the
+    flexibility to choose between the two. If `adjust_lr_fn` is not specified, the default is "original".
+
+    For further details regarding the algorithm we refer to `Muon: An optimizer for hidden layers in neural networks`_
+    and `Muon is Scalable for LLM Training`_.
+    """
+    + rf"""
+    Args:
+        {_params_doc}. Note that Muon is an optimizer for 2D parameters of neural network hidden layers. Other
+            parameters, such as bias, and embedding, should be optimized by a standard method such as AdamW.
+        lr (float, Tensor, optional): learning rate (default: 1e-3).
+        weight_decay (float, optional): weight decay (L2 penalty). (default: 0.1)
+        momentum (float, optional): momentum factor (default: 0.95)
+        nesterov (bool, optional): enables Nesterov momentum. Only applicable
+            when momentum is non-zero
+        ns_coefficients (tuple of three floats, optional): coefficients \(a,b,c\) for the
+            Newton–Schulz orthogonalization polynomial (default: ({DEFAULT_A}, {DEFAULT_B}, {DEFAULT_C}))
+        eps (float, optional): term added to the denominator for numerical stability. (default: {EPS})
+        ns_steps (int, optional): number of Newton–Schulz iteration steps. (default: {DEFAULT_NS_STEPS})
+        adjust_lr_fn (str, optional): function to adjust learning rate. One of "original" and "match_rms_adamw".
+            If not specified, we will default to use "original". (default: None)
+
+    .. _Muon\: An optimizer for hidden layers in neural networks:
+        https://kellerjordan.github.io/posts/muon/
+    .. _Muon is Scalable for LLM Training:
+        https://arxiv.org/pdf/2502.16982
+
+    """
+)
+
+
+def _single_tensor_muon(
+    params: list[Tensor],
+    grads: list[Tensor],
+    muon_momentum_bufs: list[Tensor],
+    *,
+    lr: float,
+    weight_decay: float,
+    momentum: float,
+    nesterov: bool,
+    ns_coefficients: tuple[float, float, float],
+    ns_steps: int,
+    eps: float,
+    adjust_lr_fn: Optional[str],
+    has_complex: bool,
+) -> None:
+    lr = _to_scalar(lr)
+    if has_complex:
+        raise ValueError("Complex parameters are not supported")
+
+    for i, param in enumerate(params):
+        grad = grads[i]
+        if grad.ndim != 2:
+            raise ValueError("Param gradient must be a 2D matrix")
+
+        buf = muon_momentum_bufs[i]
+        buf.lerp_(grad, 1 - momentum)
+        update = grad.lerp(buf, momentum) if nesterov else buf
+
+        update = _zeropower_via_newtonschulz(update, ns_coefficients, ns_steps, eps)
+
+        adjusted_lr = _adjust_lr(lr, adjust_lr_fn, param.shape)
+
+        param.mul_(1 - lr * weight_decay)
+        param.add_(update, alpha=-adjusted_lr)
+
+
+@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_muon)
+def muon(
+    params: list[Tensor],
+    grads: list[Tensor],
+    muon_momentum_bufs: list[Tensor],
+    *,
+    foreach: Optional[bool] = None,
+    lr: float,
+    weight_decay: float,
+    momentum: float,
+    nesterov: bool,
+    ns_coefficients: tuple[float, float, float],
+    ns_steps: int,
+    eps: float,
+    adjust_lr_fn: Optional[str],
+    has_complex: bool,
+):
+    r"""Functional API that performs Muon algorithm computation.
+
+    See :class:`~torch.optim.Muon` for details.
+    """
+    if foreach is not None and foreach:
+        raise RuntimeError("Foreach is not supported for Muon yet")
+
+    func = _single_tensor_muon
+
+    func(
+        params,
+        grads,
+        muon_momentum_bufs,
+        lr=lr,
+        weight_decay=weight_decay,
+        momentum=momentum,
+        nesterov=nesterov,
+        ns_coefficients=ns_coefficients,
+        ns_steps=ns_steps,
+        eps=eps,
+        adjust_lr_fn=adjust_lr_fn,
+        has_complex=has_complex,
+    )
