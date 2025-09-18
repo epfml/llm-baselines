@@ -13,6 +13,8 @@ import config
 from models.utils import get_model
 from data.utils import get_dataset
 from optim.base import train_base
+from optim.muonaux import MuonWithAux
+from optim.ademamix import AdEMAMix
 import distributed
 
 
@@ -72,6 +74,15 @@ def main(args):
         extra_args = dict(fused=True) if use_fused else dict()
         opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
                                 weight_decay=args.weight_decay, **extra_args)
+    elif args.opt == 'muon':
+        # Muon needs to fall back to something for non matrix params
+        opt = 
+            
+    elif args.opt == 'muonema':
+        # Muon needs to fallback to something for the non matrix params
+        opt = Muon(group_specs,args.lr, betas=(args.beta1, args.beta2, args.beta3),alpha=args.alpha,)
+    elif args.opt == 'ademamix':
+        opt = AdEMAMix(group_specs,args.lr, betas=(args.beta1, args.beta2,args.beta3),alpha=args.alpha,)
     else:
         opt = torch.optim.SGD(group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     

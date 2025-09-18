@@ -198,7 +198,7 @@ class MuonEMA(Optimizer):
                 slow_momentum_bufs,
             )
 
-            muon(
+            muonema(
                 params_with_grad,
                 grads,
                 fast_momentum_bufs,
