@@ -9,13 +9,14 @@ from typing import Optional
 import torch
 from torch import Tensor
 
-from .optimizer import (
-    _disable_dynamo_if_unsupported,
-    _params_doc,
-    _to_scalar,
+from torch.optim.optimizer import (
+    #_disable_dynamo_if_unsupported,
+    #_params_doc,
+    #_to_scalar,
     Optimizer,
     ParamsT,
 )
+
 
 
 __all__ = ["MuonEMA"]
@@ -93,7 +94,8 @@ class MuonEMA(Optimizer):
         lr: float = 1e-3,
         weight_decay: float = 0.1,
         fast_momentum: float = 0.95, # I dislike this naming scheme, should follow beta1 like adam
-        slow_momentum: float = 0.999, 
+        slow_momentum: float = 0.999,
+        alpha: float = 0.4, # should it be larger the smaller fast is? 
         nesterov: bool = True,
         ns_coefficients: tuple[float, float, float] = (DEFAULT_A, DEFAULT_B, DEFAULT_C),
         eps: float = EPS,
@@ -106,6 +108,8 @@ class MuonEMA(Optimizer):
             raise ValueError(f"Learning rate should be >= 0 but is: {lr}")
         if not 0.0 <= fast_momentum:
             raise ValueError(f"momentum should be >= 0 but is: {fast_momentum}")
+        if not 0.0 <= slow_momentum:
+            raise ValueError(f"momentum should be >= 0 but is: {slow_momentum}")
         if not 0.0 <= weight_decay:
             raise ValueError(f"weight decay should be >= 0 but is: {weight_decay}")
         if adjust_lr_fn is not None and adjust_lr_fn not in [
@@ -120,6 +124,7 @@ class MuonEMA(Optimizer):
             "lr": lr,
             "weight_decay": weight_decay,
             "fast_momentum": fast_momentum,
+            "slow_momentum": slow_momentum,
             "nesterov": nesterov,
             "ns_coefficients": ns_coefficients,
             "eps": eps,
@@ -273,7 +278,7 @@ MuonEMA.__doc__ = (
     """
     + rf"""
     Args:
-        {_params_doc}. Note that Muon is an optimizer for 2D parameters of neural network hidden layers. Other
+        . Note that Muon is an optimizer for 2D parameters of neural network hidden layers. Other
             parameters, such as bias, and embedding, should be optimized by a standard method such as AdamW.
         lr (float, Tensor, optional): learning rate (default: 1e-3).
         weight_decay (float, optional): weight decay (L2 penalty). (default: 0.1)
@@ -300,6 +305,7 @@ def _single_tensor_muonema(
     params: list[Tensor],
     grads: list[Tensor],
     fast_momentum_bufs: list[Tensor],
+    slow_momentum_bufs: list[Tensor],
     *,
     lr: float,
     weight_decay: float,
@@ -313,7 +319,7 @@ def _single_tensor_muonema(
     adjust_lr_fn: Optional[str],
     has_complex: bool,
 ) -> None:
-    lr = _to_scalar(lr)
+    lr = float(lr) #_to_scalar(lr)
     if has_complex:
         raise ValueError("Complex parameters are not supported")
 
@@ -326,8 +332,8 @@ def _single_tensor_muonema(
         fast_buf.lerp_(grad, 1 - fast_momentum)
         update = grad.add_(fast_buf, alpha=fast_momentum) if nesterov else fast_buf
 
-        slow_buf = fast_momentum_bufs[i]
-        slow_buf.lerp_(grad, 1 - fast_momentum)
+        slow_buf = slow_momentum_bufs[i]
+        slow_buf.lerp_(grad, 1 - slow_momentum)
         if nesterov:
             update.add_(slow_buf, alpha=alpha*slow_momentum) if nesterov else slow_buf # look into how nesterov would work here
         else:
@@ -341,7 +347,7 @@ def _single_tensor_muonema(
         param.add_(update, alpha=-adjusted_lr)
 
 
-@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_muonema)
+#@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_muonema)
 def muonema(
     params: list[Tensor],
     grads: list[Tensor],

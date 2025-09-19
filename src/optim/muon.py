@@ -8,13 +8,15 @@ from typing import Optional
 
 import torch
 from torch import Tensor
-from .optimizer import (
-    _disable_dynamo_if_unsupported,
-    _params_doc,
-    _to_scalar,
+
+from torch.optim.optimizer import (
+    #_disable_dynamo_if_unsupported,
+    #_params_doc,
+    #_to_scalar,
     Optimizer,
     ParamsT,
 )
+
 
 
 __all__ = ["Muon"]
@@ -171,7 +173,7 @@ class Muon(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            lr = group["lr"]
+e            lr = group["lr"]
             weight_decay = group["weight_decay"]
             momentum = group["momentum"]
 
@@ -260,7 +262,7 @@ Muon.__doc__ = (
     """
     + rf"""
     Args:
-        {_params_doc}. Note that Muon is an optimizer for 2D parameters of neural network hidden layers. Other
+        . Note that Muon is an optimizer for 2D parameters of neural network hidden layers. Other
             parameters, such as bias, and embedding, should be optimized by a standard method such as AdamW.
         lr (float, Tensor, optional): learning rate (default: 1e-3).
         weight_decay (float, optional): weight decay (L2 penalty). (default: 0.1)
@@ -298,7 +300,7 @@ def _single_tensor_muon(
     adjust_lr_fn: Optional[str],
     has_complex: bool,
 ) -> None:
-    lr = _to_scalar(lr)
+    lr = float(lr)
     if has_complex:
         raise ValueError("Complex parameters are not supported")
 
@@ -319,7 +321,7 @@ def _single_tensor_muon(
         param.add_(update, alpha=-adjusted_lr)
 
 
-@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_muon)
+#@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_muon)
 def muon(
     params: list[Tensor],
     grads: list[Tensor],

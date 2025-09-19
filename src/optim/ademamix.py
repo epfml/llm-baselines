@@ -18,26 +18,28 @@ from typing import cast, Optional, Union
 import torch
 from torch import Tensor
 
-from .optimizer import (
+from torch.optim.optimizer import (
     _capturable_doc,
     _default_to_fused_or_foreach,
     _differentiable_doc,
-    _disable_dynamo_if_unsupported,
+    #_disable_dynamo_if_unsupported,
     _foreach_doc,
     _get_capturable_supported_devices,
     _get_scalar_dtype,
     _get_value,
     _maximize_doc,
-    _params_doc,
-    _stack_if_compiling,
-    _to_scalar,
+    #_params_doc,
+    #_stack_if_compiling,
+    #_to_scalar,
     _use_grad_for_differentiable,
     _view_as_real,
     DeviceDict,
-    DeviceDtypeDict,
+    #DeviceDtypeDict,
     Optimizer,
     ParamsT,
 )
+
+
 
 __all__ = ["AdEMAMix", "ademamix"]
 
@@ -300,7 +302,6 @@ class AdEMAMix(Optimizer):
                 max_exp_avg_sqs,
                 state_steps,
             )
-
             ademamix(
                 params_with_grad,
                 grads,
@@ -369,7 +370,6 @@ AdEMAMix.__doc__ = (
     """
     + rf"""
     Args:
-        {_params_doc}
         lr (float, Tensor, optional): learning rate (default: 1e-3). A tensor LR
             is not yet supported for all our implementations. Please use a float
             LR if you are not also specifying capturable=True.
@@ -439,7 +439,7 @@ def _single_tensor_ademamix(
         assert isinstance(beta3, float)
         assert isinstance(alpha, float)
     else:
-        lr = _to_scalar(lr)
+        lr = float(lr)
         # TODO: Support nonzero-dim Tensor betas, see #147921
 
     # We only shuffle around the beta when it is a Tensor, otherwise, we prefer
@@ -447,11 +447,11 @@ def _single_tensor_ademamix(
     # Note: ensure type declaration is under conditional check for isinstance
     # or else torchscript will get cranky about the DeviceDict type.
     if isinstance(beta1, Tensor):
-        beta1_dict: Optional[DeviceDtypeDict] = {(beta1.device, beta1.dtype): beta1}
+        beta1_dict = {(beta1.device, beta1.dtype): beta1}
     else:
         beta1_dict = None
     if isinstance(beta3, Tensor):
-        beta3_dict: Optional[DeviceDtypeDict] = {(beta3.device, beta3.dtype): beta3}
+        beta3_dict = {(beta3.device, beta3.dtype): beta3}
     else:
         beta3_dict = None
 
@@ -605,7 +605,7 @@ def _single_tensor_ademamix(
                 ).add_(eps)
 
             # lr 
-            param.addcdiv_(-lr*numer, denom)
+            param.addcdiv_(numer, denom,value=-lr)
         else:
             step = _get_value(step_t)
 
@@ -625,7 +625,6 @@ def _single_tensor_ademamix(
                 denom = (max_exp_avg_sqs[i].sqrt() / bias_correction2_sqrt).add_(eps)
             else:
                 denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
-
             numer = torch.add(exp_avg_fast,exp_avg_slow,alpha=alpha*bias_correction1)
             param.addcdiv_(numer, denom, value=-step_size)
 
@@ -711,9 +710,9 @@ def _multi_tensor_ademamix(
 
     assert not differentiable, "_foreach ops don't support autograd"
 
-    lr = _to_scalar(lr)
+    lr = float(lr)
     # TODO: Support nonzero-dim Tensor betas, see #147921
-    alpha = _to_scalar(alpha)
+    alpha = float(alpha)
     # TODO: Support Tensor alphas
 
     grouped_tensors = Optimizer._group_tensors_by_device_and_dtype(
@@ -912,6 +911,7 @@ def _multi_tensor_ademamix(
             # However as we do not want to modify device_exp_avgs_slow with bias_correction this is not possible. 
             numer = torch._foreach_div(device_exp_avgs_fast, bias_correction1)
             torch._foreach_add_(numer,device_exp_avgs_slow,alpha=alpha)
+
             torch._foreach_addcdiv_(
                 device_params,
                 numer,
@@ -920,7 +920,7 @@ def _multi_tensor_ademamix(
             )
 
 
-@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_ademamix)
+#@_disable_dynamo_if_unsupported(single_tensor_fn=_single_tensor_ademamix)
 def ademamix(
     params: list[Tensor],
     grads: list[Tensor],

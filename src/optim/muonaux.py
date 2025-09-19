@@ -1,10 +1,7 @@
 from typing import Callable, Optional, Dict, Any, List, Union, Tuple
 import torch
 from torch import nn
-from torch.optim import (
-    Optimizer,
-    ParamsT,
-)
+from torch.optim.optimizer import Optimizer, ParamsT
 from .muon import Muon
 from .muon_ema import MuonEMA
 import warnings
@@ -20,8 +17,9 @@ but named_parameters (better) and regular parameters should work too.
 class MuonWithAux(Optimizer):
     def __init__(self, 
         params: ParamsT, 
+        muon_type: str = "muon",
         muon_kwargs: Optional[dict] = None,
-        aux_opt_class: Callable[Optimizer] = torch.optim.AdamW,
+        aux_opt_class  = torch.optim.AdamW,
         aux_kwargs: Optional[dict[str,any]] = None, # whether to use defaults or not
     ):
         if muon_kwargs is None:
@@ -60,7 +58,7 @@ class MuonWithAux(Optimizer):
                     muon_params.append(p)
                 else: 
                     aux_params.append(p)
-        if 'muon_type' in muon_params and muon_params['muon_type'] == "muonema":
+        if muon_type == "muonema":
             self.muon_opt = MuonEMA(muon_params, **muon_kwargs)
         else:
             self.muon_opt = Muon(muon_params,**muon_kwargs)
@@ -68,8 +66,8 @@ class MuonWithAux(Optimizer):
         
         # Combined param groups for base Optimizer bookkeeping
         param_groups: List[Dict[str, Any]] = []
-        param_groups = self.muon_opt.param_groups 
-        param_groups += self.aux_opt.param_groups
+        param_groups = self.muon_opt.param_groups.copy()
+        param_groups += self.aux_opt.param_groups.copy()
         super().__init__(param_groups, defaults={})
 
     @torch.no_grad()

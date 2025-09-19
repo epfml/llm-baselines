@@ -74,15 +74,18 @@ def main(args):
         extra_args = dict(fused=True) if use_fused else dict()
         opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
                                 weight_decay=args.weight_decay, **extra_args)
-    elif args.opt == 'muon':
-        # Muon needs to fall back to something for non matrix params
-        opt = 
-            
-    elif args.opt == 'muonema':
-        # Muon needs to fallback to something for the non matrix params
-        opt = Muon(group_specs,args.lr, betas=(args.beta1, args.beta2, args.beta3),alpha=args.alpha,)
+    elif args.opt == 'muon' or args.opt == 'muonema':
+        hidden_matrix_params = [p for n, p in model.named_parameters() if p.ndim >= 2 and "embed" not in n]
+        embed_params = [p for n, p in model.named_parameters() if "embed" in n]
+        scalar_params = [p for p in model.parameters() if p.ndim < 2]
+        #head_params = [model.lm_head.weight] [dict(params=head_params, lr=0.22),
+        adam_groups = [dict(params=embed_params, lr=0.6), dict(params=scalar_params, lr=0.04)]
+        adam_groups = [dict(**g, betas=(0.8, 0.95), eps=1e-10, use_muon=False) for g in adam_groups]
+        muon_group = dict(params=hidden_matrix_params, lr=0.05, momentum=0.95, use_muon=True)
+        param_groups = [*adam_groups, muon_group]
+        opt = MuonWithAux(param_groups,muon_type='muon_type')    
     elif args.opt == 'ademamix':
-        opt = AdEMAMix(group_specs,args.lr, betas=(args.beta1, args.beta2,args.beta3),alpha=args.alpha,)
+        opt = AdEMAMix(group_specs,args.lr, betas=(args.beta1, args.beta2,args.beta3),alpha=args.alpha, weight_decay=args.weight_decay)
     else:
         opt = torch.optim.SGD(group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     

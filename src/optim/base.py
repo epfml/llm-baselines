@@ -81,6 +81,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
 
             loss = outputs['loss'] / acc_steps
             loss.backward()
+            print(loss.item())
             substep += 1
             if substep % len(data["train"]) == 0:
                 train_epochs += 1
