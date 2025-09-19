@@ -75,11 +75,11 @@ def main(args):
         opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
                                 weight_decay=args.weight_decay, **extra_args)
     elif args.opt == 'muon' or args.opt == 'muonema':
-        hidden_matrix_params = [p for n, p in model.named_parameters() if p.ndim >= 2 and "embed" not in n]
+        hidden_matrix_params = [p for n, p in model.named_parameters() if p.ndim >= 2 and "embed" not in n and not p is model.lm_head.weight]
         embed_params = [p for n, p in model.named_parameters() if "embed" in n]
         scalar_params = [p for p in model.parameters() if p.ndim < 2]
-        #head_params = [model.lm_head.weight] [dict(params=head_params, lr=0.22),
-        adam_groups = [dict(params=embed_params, lr=0.6), dict(params=scalar_params, lr=0.04)]
+        head_params = [model.lm_head.weight]
+        adam_groups = [dict(params=head_params, lr=0.22),dict(params=embed_params, lr=0.6), dict(params=scalar_params, lr=0.04)]
         adam_groups = [dict(**g, betas=(0.8, 0.95), eps=1e-10, use_muon=False) for g in adam_groups]
         muon_group = dict(params=hidden_matrix_params, lr=0.05, momentum=0.95, use_muon=True)
         param_groups = [*adam_groups, muon_group]

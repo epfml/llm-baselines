@@ -173,7 +173,7 @@ class Muon(Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-e            lr = group["lr"]
+            lr = group["lr"]
             weight_decay = group["weight_decay"]
             momentum = group["momentum"]
 
