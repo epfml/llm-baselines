@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 
 from . import ddp
 from . import single
+=======
+from . import ddp, single
+>>>>>>> otherfork/main
 
 BACKEND_TYPE_TO_MODULE_MAP = {
     "nccl": ddp.DataParallelDistributedBackend,

@@ -361,3 +361,5 @@ def muon(
         adjust_lr_fn=adjust_lr_fn,
         has_complex=has_complex,
     )
+
+# maybe we want it

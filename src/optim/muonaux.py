@@ -104,3 +104,90 @@ class MuonWithAux(Optimizer):
             self.aux_opt.load_state_dict(state_dict["aux"])
 
 
+# Taken from muon for the EPFL people
+class CombinedScheduler:
+    """
+    CombinedScheduler implements a scheduler for the Muon optimizer: it leverages both Muon and AdamW learning rates, and applies the same sort of scheduler for both of them.
+
+    Arguments:
+        optimizer: Muon optimizer.
+        cfg: arguments used for schedulers.
+        muon_lr_key: defaults["lr"] is responsible for the Muon learning rate.
+        adamw_lr_key: defaults["adamw_r"] is responsible for the AdamW learning rate.
+    """
+
+    def __init__(self, optimizer, cfg, muon_lr_key="lr", adamw_lr_key="adamw_lr"):
+        self.schedulers = []
+        scheduler_map = {
+            "cos": torch.optim.lr_scheduler.OneCycleLR,
+            "linear": torch.optim.lr_scheduler.OneCycleLR,
+            "cos_inf": lambda opt, lr: torch.optim.lr_scheduler.LambdaLR(
+                opt,
+                cos_inf_schedule(
+                    n_iterations=cfg.iterations,
+                    n_warmup=cfg.warmup_steps,
+                    n_inf=cfg.cos_inf_steps,
+                    div_factor=1e2,
+                    final_div_factor=0.1,
+                ),
+            ),
+            "wsd": lambda opt, lr: torch.optim.lr_scheduler.LambdaLR(
+                opt,
+                wsd_schedule(
+                    n_iterations=cfg.iterations,
+                    n_warmup=cfg.warmup_steps,
+                    fract_decay=cfg.wsd_fract_decay,
+                    init_div_factor=1e2,
+                    final_lr_factor=cfg.wsd_final_lr_scale,
+                    decay_type=cfg.decay_type,
+                ),
+            ),
+            "cos_wsd": lambda opt, lr: torch.optim.lr_scheduler.LambdaLR(
+                opt,
+                cosine_wsd_decay_schedule(
+                    n_iterations=cfg.iterations,
+                    n_warmup=cfg.warmup_steps,
+                    anneal_end_factor=0.15,
+                    fract_decay=cfg.wsd_fract_decay,
+                    init_div_factor=1e2,
+                    final_lr_factor=0.1,
+                    decay_type=cfg.decay_type,
+                ),
+            ),
+        }
+
+        for group in optimizer.param_groups:
+            lr_key = muon_lr_key if muon_lr_key in group else adamw_lr_key
+            if lr_key in group:
+                scheduler_cls = scheduler_map.get(cfg.scheduler, None)
+                if scheduler_cls:
+                    if cfg.scheduler in ["cos", "linear"]:
+                        scheduler = scheduler_cls(
+                            optimizer,
+                            max_lr=[group.get(lr_key, getattr(cfg, lr_key.lower()))],
+                            total_steps=cfg.iterations,
+                            pct_start=cfg.warmup_steps / cfg.iterations,
+                            anneal_strategy=cfg.scheduler,
+                            cycle_momentum=False,
+                            div_factor=1e2,
+                            final_div_factor=1,
+                        )
+                    else:
+                        scheduler = scheduler_cls(
+                            optimizer, group.get(lr_key, getattr(cfg, lr_key.lower()))
+                        )
+                    self.schedulers.append(scheduler)
+
+    def step(self):
+        for scheduler in self.schedulers:
+            scheduler.step()
+
+    def state_dict(self):
+        state_dict = {}
+        for i, scheduler in enumerate(self.schedulers):
+            state_dict[f"scheduler_{i}"] = scheduler.state_dict()
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        for i, scheduler in enumerate(self.schedulers):
+            scheduler.load_state_dict(state_dict[f"scheduler_{i}"])

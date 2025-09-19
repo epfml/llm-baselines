@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from tqdm import tqdm
 import numpy as np
 import tiktoken
@@ -8,11 +9,24 @@ import os
 SPJ_DATA_PATH = os.path.join(os.path.dirname(__file__), "datasets/slimpajama6B/")
 SPJ_CHUNK_1_DATA_PATH = os.path.join(SPJ_DATA_PATH, "chunk1")
 
+=======
+import os
+
+import numpy as np
+import tiktoken
+from datasets import load_dataset
+from tqdm import tqdm
+>>>>>>> otherfork/main
 
 tknzr = tiktoken.get_encoding("gpt2")
 
 
+<<<<<<< HEAD
 def get_slimpajama_data(num_proc=40):
+=======
+def get_slimpajama_data(datasets_dir, num_proc=40):
+    SPJ_DATA_PATH = os.path.join(datasets_dir, "slimpajama6B/")
+>>>>>>> otherfork/main
     if not os.path.exists(os.path.join(SPJ_DATA_PATH, "train.bin")):
         os.makedirs(SPJ_DATA_PATH, exist_ok=True)
         dataset = load_dataset("DKYoon/SlimPajama-6B")
@@ -60,6 +74,7 @@ def get_slimpajama_data(num_proc=40):
                 idx += len(arr_batch)
             arr.flush()
 
+<<<<<<< HEAD
     train_data = np.memmap(
         os.path.join(SPJ_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r"
     )
@@ -71,6 +86,17 @@ def get_slimpajama_data(num_proc=40):
 
 
 def get_slimpajama_chunk1(num_proc=40):
+=======
+    return {
+        "train": os.path.join(SPJ_DATA_PATH, "train.bin"),
+        "val": os.path.join(SPJ_DATA_PATH, "val.bin"),
+    }
+
+
+def get_slimpajama_chunk1(datasets_dir, num_proc=40):
+    SPJ_DATA_PATH = os.path.join(datasets_dir, "slimpajama6B/")
+    SPJ_CHUNK_1_DATA_PATH = os.path.join(SPJ_DATA_PATH, "chunk1")
+>>>>>>> otherfork/main
     if not os.path.exists(os.path.join(SPJ_CHUNK_1_DATA_PATH, "train.bin")):
         os.makedirs(SPJ_DATA_PATH, exist_ok=True)
         dataset = load_dataset("cerebras/SlimPajama-627B", split="train/chunk1")
@@ -118,6 +144,7 @@ def get_slimpajama_chunk1(num_proc=40):
                 idx += len(arr_batch)
             arr.flush()
 
+<<<<<<< HEAD
     train_data = np.memmap(
         os.path.join(SPJ_DATA_PATH, "train.bin"), dtype=np.uint16, mode="r"
     )
@@ -126,3 +153,9 @@ def get_slimpajama_chunk1(num_proc=40):
     )
 
     return {"train": train_data, "val": val_data}
+=======
+    return {
+        "train": os.path.join(SPJ_DATA_PATH, "train.bin"),
+        "val": os.path.join(SPJ_DATA_PATH, "val.bin"),
+    }
+>>>>>>> otherfork/main
