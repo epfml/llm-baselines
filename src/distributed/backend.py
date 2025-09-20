@@ -1,28 +1,16 @@
-<<<<<<< HEAD
-
-=======
->>>>>>> otherfork/main
 from typing import List
 
 
 class DistributedBackend(object):
-<<<<<<< HEAD
-
-=======
->>>>>>> otherfork/main
     def __init__(self, args):
         pass
 
     def transform_model(self, model):
         raise NotImplementedError
 
-<<<<<<< HEAD
-    def get_context_for_microstep_forward(self, model, microstep_idx, gradient_accumulation_steps):
-=======
     def get_context_for_microstep_forward(
         self, model, microstep_idx, gradient_accumulation_steps
     ):
->>>>>>> otherfork/main
         raise NotImplementedError
 
     def is_master_process(self) -> bool:
@@ -42,9 +30,3 @@ class DistributedBackend(object):
 
     def finalize(self):
         pass
-<<<<<<< HEAD
-
-    def sync(self):
-        pass
-=======
->>>>>>> otherfork/main

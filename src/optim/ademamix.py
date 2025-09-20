@@ -121,7 +121,7 @@ class AdEMAMix(Optimizer):
             raise ValueError("All three betas need to be floats or Tensors")
         if ((beta3_warmup_steps is None) != (beta3_start is None)):
             raise ValueError("Both the betas_warmup_steps and beta_start need to be initialized for scheduler")
-        if ((beta3_warmup_steps is None) != (beta3_start is None)):
+        if ((alpha_warmup_steps is None) != (alpha_start is None)):
             raise ValueError("Both the alpha_warmup_steps and alpha_start need to be initialized for schedule")
         if isinstance(betas[0], Tensor):
             if not capturable and foreach:

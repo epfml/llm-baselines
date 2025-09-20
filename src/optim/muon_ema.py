@@ -4,7 +4,7 @@
 
 import math
 from collections.abc import MutableMapping
-from typing import Optional
+from typing import Optional,Union
 
 import torch
 from torch import Tensor
@@ -95,6 +95,10 @@ class MuonEMA(Optimizer):
         weight_decay: float = 0.1,
         fast_momentum: float = 0.95, # I dislike this naming scheme, should follow beta1 like adam
         slow_momentum: float = 0.999,
+        slow_momentum_warmup_steps: Optional[int] = None,
+        slow_momentum_start: Optional[Union[float,Tensor]] = None,
+        alpha_warmup_steps: Optional[int] = None,
+        alpha_start: Optional[Union[float,Tensor]] = None, 
         alpha: float = 0.4, # should it be larger the smaller fast is? 
         nesterov: bool = True,
         ns_coefficients: tuple[float, float, float] = (DEFAULT_A, DEFAULT_B, DEFAULT_C),
@@ -112,6 +116,16 @@ class MuonEMA(Optimizer):
             raise ValueError(f"momentum should be >= 0 but is: {slow_momentum}")
         if not 0.0 <= weight_decay:
             raise ValueError(f"weight decay should be >= 0 but is: {weight_decay}")
+        if not slow_momentum_start is None and not 0.0 <= slow_momentum_start < 1.0:
+            raise ValueError(f"Invalid start value of slow_momentum: {slow_momentum_start}")
+        if not slow_momentum_warmup_steps is None and not 1 < slow_momentum_warmup_steps:
+            raise ValueError(f"Invalid number of warmup steps for slow_momentum: {slow_momentum_warmup_steps}")
+        if not alpha_warmup_steps is None and not 1 < alpha_warmup_steps:
+            raise ValueError(f"Invalid number of warmup steps for alpha: {alpha_warmup_steps}")
+        if ((slow_momentum_warmup_steps is None) != (slow_momentum_start is None)):
+            raise ValueError("Both the betas_warmup_steps and beta_start need to be initialized for scheduler")
+        if ((alpha_warmup_steps is None) != (alpha_start is None)):
+            raise ValueError("Both the alpha_warmup_steps and alpha_start need to be initialized for schedule")
         if adjust_lr_fn is not None and adjust_lr_fn not in [
             "original",
             "match_rms_adamw",
@@ -125,6 +139,7 @@ class MuonEMA(Optimizer):
             "weight_decay": weight_decay,
             "fast_momentum": fast_momentum,
             "slow_momentum": slow_momentum,
+            "alpha":alpha,
             "nesterov": nesterov,
             "ns_coefficients": ns_coefficients,
             "eps": eps,
@@ -359,6 +374,7 @@ def muonema(
     weight_decay: float,
     fast_momentum: float,
     slow_momentum: float,
+    alpha: float,
     nesterov: bool,
     ns_coefficients: tuple[float, float, float],
     ns_steps: int,
@@ -384,6 +400,7 @@ def muonema(
         weight_decay=weight_decay,
         fast_momentum=fast_momentum,
         slow_momentum=slow_momentum,
+        alpha=alpha,
         nesterov=nesterov,
         ns_coefficients=ns_coefficients,
         ns_steps=ns_steps,

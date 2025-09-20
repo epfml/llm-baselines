@@ -22,10 +22,9 @@ from optim.base import train
 from optim.lamb import Lamb
 from optim.lion import Lion
 from optim.mars import MARS
-from optim.muon import CombinedScheduler, DistributedMuon, Muon
+from optim.muonaux import MuonWithAux,CombinedScheduler
 from optim.prodigy import Prodigy
-from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
-                            dd_schedule, wsd_schedule)
+from optim.schedule import (cos_inf_schedule, wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
 from optim.sign import Signum
 from optim.soap import SOAP
@@ -150,20 +149,26 @@ def main(args, parser):
             if args.distributed_backend is None
             else list(model.module.parameters())
         )
-        opt = Muon(
+        opt = MuonWithAux(
             muon_params=param_list,
-            lr=args.muon_lr_factor,
-            momentum=args.momentum,
-            nesterov=args.nesterov,
-            ns_steps=args.muon_ns_steps,
+            muon_kwargs={
+                'lr':args.muon_lr_factor,
+                'momentum':args.momentum,
+                'nesterov':args.nesterov,
+                'ns_steps':args.muon_ns_steps,
+            },
             adamw_params=None,
-            adamw_lr=args.lr,
-            adamw_betas=(args.beta1, args.beta2),
-            adamw_eps=1e-8,
-            adamw_wd=args.weight_decay,
+            aux_opt_class=torch.optim.AdamW,
+            aux_kwargs={
+                'lr':args.lr,
+                'betas':(args.beta1, args.beta2),
+                'adamw_eps':1e-8,
+                'adamw_wd':args.weight_decay,
+            },
         )
     elif args.opt == "d-muon":
-            opt = DistributedMuon(
+            # CHANGE
+            opt = MuonWithAux(
                 group_specs,
                 lr=args.lr,
                 momentum=args.momentum,
@@ -173,14 +178,52 @@ def main(args, parser):
                 adamw_eps=1e-8,
                 weight_decay=args.weight_decay,
             )
+            param_list = (
+                list(model.parameters())
+                if args.distributed_backend is None
+                else list(model.module.parameters())
+            )
+            opt = MuonWithAux(
+                muon_params=param_list,
+                muon_kwargs={
+                    'lr':args.muon_lr_factor,
+                    'momentum':args.momentum,
+                    'nesterov':args.nesterov,
+                    'ns_steps':args.muon_ns_steps,
+                },
+                adamw_params=None,
+                aux_opt_class=torch.optim.AdamW,
+                aux_kwargs={
+                    'lr':args.lr,
+                    'betas':(args.beta1, args.beta2),
+                    'adamw_eps':1e-8,
+                    'adamw_wd':args.weight_decay,
+                },
+            )
     elif args.opt == "ademamix":
+            # CHANGE
             opt = AdEMAMix(
                 group_specs,
                 lr=args.lr,
                 betas=(args.beta1, args.beta2, args.adema_beta3),
                 alpha=args.adema_alpha,
-                beta3_warmup=args.adema_beta3_warmup,
-                alpha_warmup=args.adema_alpha_warmup,
+                beta3_warmup_steps=args.adema_beta3_warmup,
+                alpha_warmup_steps=args.adema_alpha_warmup,
+                beta3_start=args.beta1,
+                alpha_start=0.0,
+                weight_decay=args.weight_decay,
+            )
+    elif args.opt == "muonema":
+            # CHANGE
+            opt = MuonWithAux(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2, args.adema_beta3),
+                alpha=args.adema_alpha,
+                beta3_warmup_steps=args.adema_beta3_warmup,
+                alpha_warmup_steps=args.adema_alpha_warmup,
+                beta3_start=args.beta1,
+                alpha_start=0.0,
                 weight_decay=args.weight_decay,
             )
     elif args.opt == "lion":

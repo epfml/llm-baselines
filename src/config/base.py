@@ -168,7 +168,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--adopt_eps", default=1e-6, type=float)
 
     # Dataset params
-    parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
+    parser.add_argument("--datasets_dir", type=str, default="/mnt/sod2-project/csb4/wgs/johan")
     parser.add_argument(
         "--dataset",
         default="slimpajama",

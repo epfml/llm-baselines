@@ -1,22 +1,6 @@
 """
-<<<<<<< HEAD
-Llama style Language Model.
-References:
-1) Llama inference code:
-https://github.com/facebookresearch/llama/blob/main/llama/model.py
-2) Mistral one file ref:
-https://github.com/mistralai/mistral-src/blob/main/one_file_ref.py
-3) Llama paper:
-https://arxiv.org/pdf/2302.13971.pdf
- 
-Main differences from GPT2:
-* Uses RMSNorm instead of LayerNorm
-* Uses a slightly different MLP (SwiGLU)
-* rotary embeddings (RoPE)
-=======
 Llama style Language Model that is 
 compilable (avoids torch complex)
->>>>>>> otherfork/main
 """
 
 import math
@@ -25,27 +9,19 @@ import tiktoken
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-<<<<<<< HEAD
-from models.base import CausalSelfAttention, GPTBase
-=======
 
 from models.base import CausalSelfAttention, GPTBase
 from models.moe import MoE
->>>>>>> otherfork/main
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device)  # type: ignore
     freqs = torch.outer(t, freqs).float()  # type: ignore
-<<<<<<< HEAD
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
-=======
     cos_freqs = torch.cos(freqs)
     sin_freqs = torch.sin(freqs)
     # Stack the cos and sin parts in the last dimension to simulate complex numbers
     return torch.stack((cos_freqs, sin_freqs), dim=-1)
->>>>>>> otherfork/main
 
 
 def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -55,19 +31,11 @@ def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Te
     """
     ndim = x.ndim
     assert 1 < ndim
-<<<<<<< HEAD
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1]), (
-        freqs_cis.shape,
-        (x.shape[1], x.shape[-1]),
-    )
-    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-=======
     assert freqs_cis.shape[:-1] == (x.shape[1], x.shape[-2])
     # New shape for broadcasting
     shape = [
         1 if i != 1 and i != ndim - 2 else d for i, d in enumerate(x.shape[:-1])
     ] + [2]
->>>>>>> otherfork/main
     return freqs_cis.view(*shape)
 
 
@@ -75,14 +43,6 @@ def apply_rotary_emb(q, k, freqs_cis):
     # q, k: (B, T, nh, hs)
     # freq_cis: (T, hs)
     # return: (B, T, nh, hs), (B, T, nh, hs)
-<<<<<<< HEAD
-    q_ = torch.view_as_complex(q.float().reshape(*q.shape[:-1], -1, 2))
-    k_ = torch.view_as_complex(k.float().reshape(*k.shape[:-1], -1, 2))
-    freqs_cis = _reshape_for_broadcast(freqs_cis, q_)
-    xq_out = torch.view_as_real(q_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(k_ * freqs_cis).flatten(3)
-    return xq_out.type_as(q), xk_out.type_as(k)
-=======
     q = q.float().reshape(*q.shape[:-1], -1, 2)
     k = k.float().reshape(*k.shape[:-1], -1, 2)
 
@@ -99,7 +59,6 @@ def apply_rotary_emb(q, k, freqs_cis):
     k_out = torch.stack((k_cos, k_sin), dim=-1).reshape(k.shape).flatten(3)
 
     return q_out, k_out
->>>>>>> otherfork/main
 
 
 class RMSNorm(nn.Module):
@@ -131,12 +90,8 @@ class LlamaMLP(nn.Module):
         self.c_proj = nn.Linear(hidden_dim, config.n_embd, bias=False)
 
     def forward(self, x):
-<<<<<<< HEAD
-        return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x))
-=======
         # tuple form because of aux loss from MoE
         return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x)), {}
->>>>>>> otherfork/main
 
 
 class LlamaAttention(CausalSelfAttention):
@@ -188,14 +143,6 @@ class LlamaBlock(nn.Module):
         self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
         self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
-<<<<<<< HEAD
-        self.mlp = LlamaMLP(config)
-
-    def forward(self, x, freqs_cis):
-        x = x + self.attn(self.ln_1(x), freqs_cis)
-        x = x + self.mlp(self.ln_2(x))
-        return x
-=======
 
         if config.moe:
             self.mlp = MoE(config, LlamaMLP)
@@ -207,7 +154,6 @@ class LlamaBlock(nn.Module):
         x_, logits_and_experts = self.mlp(self.ln_2(x))
         x = x + x_
         return x, logits_and_experts
->>>>>>> otherfork/main
 
 
 class Llama(GPTBase):
@@ -249,10 +195,6 @@ class Llama(GPTBase):
                     p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
                 )
 
-<<<<<<< HEAD
-
-=======
->>>>>>> otherfork/main
     def get_num_params(self, non_embedding=True):
         """
         Return the number of parameters in the model.
@@ -263,11 +205,7 @@ class Llama(GPTBase):
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
 
-<<<<<<< HEAD
-    def forward(self, idx, targets=None, get_logits=False):
-=======
     def forward(self, idx, targets=None, get_logits=False, moe=False):
->>>>>>> otherfork/main
         device = idx.device
         b, t = idx.size()
         assert (
@@ -282,12 +220,6 @@ class Llama(GPTBase):
         x = self.transformer.drop(tok_emb)
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
-<<<<<<< HEAD
-        for block_idx, block in enumerate(self.transformer.h):
-            x = block(x, freqs_cis=freqs_cis)
-        x = self.transformer.ln_f(x)
-
-=======
         # router logits is a list for each layer's routing, each of shape (b * seq_len, n_experts)
         router_logits = []
         # experts is a list for each layer's selected experts, shape (b * seq_len, topk)
@@ -302,15 +234,12 @@ class Llama(GPTBase):
 
         # aux_losses is a dict with keys for different auxiliary losses
         aux_losses = {}
->>>>>>> otherfork/main
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
-<<<<<<< HEAD
-=======
             if moe and self.config.moe_routing == "standard_gating":
                 # calculate the router losses per layer
                 for logit, expert_choice in zip(router_logits, experts):
@@ -325,7 +254,6 @@ class Llama(GPTBase):
                                 * getattr(self.config, k + "_factor")
                                 / self.config.n_layer
                             )
->>>>>>> otherfork/main
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -335,11 +263,6 @@ class Llama(GPTBase):
 
         logits = logits if get_logits else None
 
-<<<<<<< HEAD
-        return {
-            "logits": logits,
-            "loss": loss,
-=======
         router_logits = (
             torch.stack(router_logits, dim=0) if len(router_logits) > 0 else None
         )
@@ -349,5 +272,4 @@ class Llama(GPTBase):
             "loss": loss,
             "aux_losses": aux_losses,
             "router_logits": router_logits,
->>>>>>> otherfork/main
         }

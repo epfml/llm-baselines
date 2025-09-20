@@ -4,12 +4,9 @@ from .backend import DistributedBackend
 
 
 class SinlgeNodeBackend(DistributedBackend):
-<<<<<<< HEAD
-=======
     def __init__(self, args):
         super().__init__(args)
         self.rank = 0
->>>>>>> otherfork/main
 
     def transform_model(self, model):
         return model

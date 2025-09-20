@@ -2,14 +2,16 @@
 Here is an original implementation of MARS. 
 Source: https://github.com/AGI-Arena/MARS
 """
-
+# currently broken as it relies on a different ns algo need to fix before any benchmarking with this.
+# Mars-EMA possible? continuation of quest of merging everything
+# why is MARS-Shampoo no good?
 # Copyright (c) 2024 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: Apache-2.0
 import math
 
 import torch
 
-from .muon import zeropower_via_newtonschulz5
+from .muon import _zeropower_via_newtonschulz
 
 
 def exists(val):
@@ -72,7 +74,7 @@ def update_fn(
         elif mars_type == "mars-shampoo" and is_grad_2d:
             factor = max(1, grad.size(0) / grad.size(1)) ** 0.5
             real_update_tmp = (
-                zeropower_via_newtonschulz5(exp_avg.mul(1.0 / (1.0 - beta1)), eps=eps)
+                _zeropower_via_newtonschulz(exp_avg.mul(1.0 / (1.0 - beta1)), eps=eps)
                 .mul(factor)
                 .add(wd, p.data)
                 .mul(-lr)

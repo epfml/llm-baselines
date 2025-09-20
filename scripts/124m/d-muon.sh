@@ -8,5 +8,5 @@ torchrun --nproc_per_node=4 ./src/main.py --config_format base --model llama --d
     --opt d-muon --lr 1e-3 --weight_decay 0.1 --scheduler cos \
     --beta1 0.8 --beta2 0.999 \
     --momentum 0.95 --nesterov True \
-    --wandb --wandb_project YOUR_WANDB-PROJECT  --wandb_entity YOUR-WANDB-ENTITY \
+       --wandb --wandb_project "$YOUR_WANDB_PROJECT"  --wandb_entity "$YOUR_WANDB_ENTITY" \
     --eval_interval 115 --latest_ckpt_interval 1000 \
