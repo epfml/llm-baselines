@@ -6,6 +6,7 @@ import torch
 import torch.distributed as dist
 
 from .arxiv import get_arxiv_2000, get_arxiv_full
+from .c4 import get_c4_data
 from .fineweb import get_fineweb_data
 from .fineweb_edu import get_fineweb_edu_data
 from .openwebtext2 import get_openwebtext2_data
@@ -46,6 +47,8 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         return get_fineweb_data(args.datasets_dir)
     if args.dataset == "finewebedu":
         return get_fineweb_edu_data(args.datasets_dir)
+    if args.dataset == "c4":
+        return get_c4_data(args.datasets_dir)
     else:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")
 

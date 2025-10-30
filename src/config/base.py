@@ -17,7 +17,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--data_seed", default=1337, type=int)
     parser.add_argument("--eval_interval", default=200, type=int)
     parser.add_argument("--full_eval_at", nargs="+", type=int)
-    parser.add_argument("--eval_batches", default=32, type=int)
+    parser.add_argument("--eval_batches", default=64, type=int)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument(
         "--distributed_backend",
@@ -47,10 +47,12 @@ def parse_args(base_parser, args, namespace):
         "--eval_seq_prefix", default="none", type=str
     )  # prefix used to generate sequences
     parser.add_argument("--log_dynamics", action="store_true")
-    # parser.add_argument(
-    #     "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
-    # )
+    parser.add_argument(
+        "--dynamics_logger_cfg", default="./src/logger/rotational_logger.yaml", type=str
+    )
     parser.add_argument("--wandb_entity", default=None, type=none_or_str)
+    parser.add_argument("--log_parameter_norms", action="store_true")
+    parser.add_argument("--norm_order", default=2)
 
     # Schedule
     parser.add_argument(
@@ -58,6 +60,9 @@ def parse_args(base_parser, args, namespace):
         default="cos",
         choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd", "dd"],
     )
+    parser.add_argument(
+        "--final_div_factor", default=1, type=float
+    )  # cosine and linear schedulers
     parser.add_argument("--cos_inf_steps", default=0, type=int)
     # parser.add_argument("--cos-final-lr", default=1e-6, type=float)
     parser.add_argument("--iterations", default=15000, type=int)
@@ -89,7 +94,7 @@ def parse_args(base_parser, args, namespace):
             "muon",
             "soap",
             "ademamix",
-            "ademamix2",
+            "adoptademamix",
             "lion",
             "sf-adamw",
             "sf-sgd",
@@ -109,6 +114,10 @@ def parse_args(base_parser, args, namespace):
             "adafactor",
             "lamb",
             "normalized-sgd",
+            "sgd-with-adam",
+            "scion",
+            "scion-light",
+            "d-muon",
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -163,6 +172,25 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--mars_beta2", default=0.99, type=float)
     parser.add_argument("--adafactor_decay_rate", default=-0.8, type=float)
     parser.add_argument("--lamb_use_bias_correction", default=False, type=bool)
+    parser.add_argument("--proj_norms", default=False, action="store_true")
+    parser.add_argument("--proj_embeds", default=False, action="store_true")
+    parser.add_argument("--proj_logits", default=False, action="store_true")
+    parser.add_argument("--sgd_sign_update", default=False, action="store_true")
+    parser.add_argument("--sign_norm", default=False, action="store_true")
+    parser.add_argument("--normalized", default=False, action="store_true")
+    parser.add_argument("--sgd_lr_scale", default=1.0, type=float)
+    parser.add_argument("--adopt_decouple", default=True, type=bool)
+    parser.add_argument("--adopt_eps", default=1e-6, type=float)
+    parser.add_argument("--cautious", default=False, type=bool)
+    parser.add_argument("--scion_lmh_scale", default=10.0, type=float)
+    parser.add_argument("--scion_emb_scale", default=1.0, type=float)
+    parser.add_argument("--scion_tr_scale", default=3.0, type=float)
+    parser.add_argument(
+        "--weight_decay_scheduler",
+        default=None,
+        choices=["linear", "cos", "stable-decay", "wsd"],
+    )
+    parser.add_argument("--final_weight_decay", default=0.1, type=float)
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
@@ -182,6 +210,7 @@ def parse_args(base_parser, args, namespace):
             "redpajamav2",
             "fineweb",
             "finewebedu",
+            "c4",
         ],
     )
     parser.add_argument(
@@ -199,6 +228,8 @@ def parse_args(base_parser, args, namespace):
         choices=[
             "base",
             "llama",
+            "mup_gpt",
+            "mup_llama",
             "test",
         ],
     )
@@ -230,6 +261,45 @@ def parse_args(base_parser, args, namespace):
     )
     parser.add_argument("--bias", default=False, type=bool)
     parser.add_argument("--compile", action="store_true")
-    parser.add_argument("--mlp_dim_exp_factor", default=1.0, type=float)
+    parser.add_argument("--untied_embeds", action="store_true") # disables weight tying between lm_head.weight and wte.weight
+    parser.add_argument(
+        "--mlp_dim_exp_factor", default=1.0, type=float
+    )  # moe arguments
+    parser.add_argument("--moe", action="store_true")
+    parser.add_argument(
+        "--moe_routing",
+        default="standard_gating",
+        type=str,
+        choices=["standard_gating", "expert_choice"],
+    )
+    parser.add_argument("--moe_num_experts", default=8, type=int)
+    parser.add_argument(  # only used for expert choice routing
+        "--capacity_factor", default=2.0, type=float
+    )
+    parser.add_argument(  # deepseek routing, experts that are always active
+        "--moe_num_shared_experts", default=0, type=int
+    )
+    parser.add_argument(
+        "--moe_router_loss",
+        default="load_balancing_z_loss",
+        type=str,
+        choices=["entropy", "load_balancing_only", "load_balancing_z_loss"],
+    )
+    parser.add_argument("--moe_num_experts_per_tok", default=2, type=int)
+    parser.add_argument("--moe_entropy_loss_factor", default=0.01, type=float)
+    parser.add_argument("--moe_aux_loss_factor", default=0.1, type=float)
+    parser.add_argument("--moe_z_loss_factor", default=0.01, type=float)
+    parser.add_argument(
+        "--moe_softmax_order",
+        type=str,
+        default="topk_softmax",
+        choices=["softmax_topk", "topk_softmax"],
+    )
+    parser.add_argument("--plot_router_logits", action="store_true")
+    parser.add_argument(
+        "--scale_emb", default=10, type=int
+    )  # mup arguments --- the base model width that mup has been configured on
+    parser.add_argument("--scale_base_model", default=256, type=int)
+    parser.add_argument("--scale_depth", default=1.4, type=float)
 
     return parser.parse_args(args, namespace)

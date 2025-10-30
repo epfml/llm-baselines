@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from models.base import CausalSelfAttention, GPTBase
+from models.moe import MoE
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -89,7 +90,8 @@ class LlamaMLP(nn.Module):
         self.c_proj = nn.Linear(hidden_dim, config.n_embd, bias=False)
 
     def forward(self, x):
-        return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x))
+        # tuple form because of aux loss from MoE
+        return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x)), {}
 
 
 class LlamaAttention(CausalSelfAttention):
@@ -141,13 +143,17 @@ class LlamaBlock(nn.Module):
         self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
         self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
-        self.mlp = LlamaMLP(config)
+
+        if config.moe:
+            self.mlp = MoE(config, LlamaMLP)
+        else:
+            self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
         x = x + self.attn(self.ln_1(x), freqs_cis)
-        x_ = self.mlp(self.ln_2(x))
+        x_, logits_and_experts = self.mlp(self.ln_2(x))
         x = x + x_
-        return x
+        return x, logits_and_experts
 
 
 class Llama(GPTBase):
@@ -176,9 +182,10 @@ class Llama(GPTBase):
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = (
-            self.lm_head.weight
-        )  # https://paperswithcode.com/method/weight-tying
+        if not config.untied_embeds:
+            self.transformer.wte.weight = (
+                self.lm_head.weight
+            )  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
         self.apply(self._init_weights)
@@ -186,8 +193,16 @@ class Llama(GPTBase):
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+                    p,
+                    mean=0.0,
+                    std=self.config.init_std / math.sqrt(2 * config.n_layer),
                 )
+            if pn.endswith("router.weight"):
+                # special scaled init to moe router?
+                with torch.no_grad():
+                    std = p.std()
+                    p.div_(p.sum(dim=1, keepdim=True))
+                    p.mul_(std / p.std())
 
     def get_num_params(self, non_embedding=True):
         """
@@ -199,7 +214,7 @@ class Llama(GPTBase):
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
 
-    def forward(self, idx, targets=None, get_logits=False):
+    def forward(self, idx, targets=None, get_logits=False, moe=False):
         device = idx.device
         b, t = idx.size()
         assert (
@@ -214,16 +229,40 @@ class Llama(GPTBase):
         x = self.transformer.drop(tok_emb)
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
+        # router logits is a list for each layer's routing, each of shape (b * seq_len, n_experts)
+        router_logits = []
+        # experts is a list for each layer's selected experts, shape (b * seq_len, topk)
+        experts = []
+
         for block in self.transformer.h:
-            x = block(x, freqs_cis=freqs_cis)
+            x, logits_and_experts = block(x, freqs_cis=freqs_cis)
+            if len(logits_and_experts) > 0:
+                router_logits.append(logits_and_experts["router_logits"])
+                experts.append(logits_and_experts["selected_experts"])
         x = self.transformer.ln_f(x)
 
+        # aux_losses is a dict with keys for different auxiliary losses
+        aux_losses = {}
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
+            if moe and self.config.moe_routing == "standard_gating":
+                # calculate the router losses per layer
+                for logit, expert_choice in zip(router_logits, experts):
+                    router_losses = self.get_router_losses(
+                        logit, expert_choice, eval=not self.training
+                    )
+                    for k, v in router_losses.items():
+                        aux_losses[k] = aux_losses.get(k, 0.0) + v
+                        if self.training:
+                            loss += (
+                                v
+                                * getattr(self.config, k + "_factor")
+                                / self.config.n_layer
+                            )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -233,7 +272,13 @@ class Llama(GPTBase):
 
         logits = logits if get_logits else None
 
+        router_logits = (
+            torch.stack(router_logits, dim=0) if len(router_logits) > 0 else None
+        )
+
         return {
             "logits": logits,
             "loss": loss,
+            "aux_losses": aux_losses,
+            "router_logits": router_logits,
         }

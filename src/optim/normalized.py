@@ -66,7 +66,8 @@ class NormalizedSGD(torch.optim.Optimizer):
                 grad = buf
 
         if sign_update:
-            grad = grad.sign()
+            update = grad.sign()
+            return update / (grad.norm() + 1e-8) * (-lr)
 
         return grad / (grad.norm() + 1e-8) * (-lr)
 

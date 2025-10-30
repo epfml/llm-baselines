@@ -2,6 +2,8 @@ import torch
 
 from .base import GPTBase, LayerNorm
 from .llama import Llama, RMSNorm
+from .mup import MuPGPTBase
+from .mup_llama import MuPLlama
 from .test import RMSNorm2, Test
 
 BLACKLIST_WEIGHT_MODULES = (
@@ -29,6 +31,20 @@ def get_model(args):
         return model
     elif args.model == "test":
         model = Test(args)
+        if args.use_pretrained != "none":
+            raise NotImplementedError(
+                f"Loading of pretrained models not yet implemented for model '{args.model}'."
+            )
+        return model
+    elif args.model == "mup_gpt":
+        model = MuPGPTBase(args)
+        if args.use_pretrained != "none":
+            raise NotImplementedError(
+                f"Loading of pretrained models not yet implemented for model '{args.model}'."
+            )
+        return model
+    elif args.model == "mup_llama":
+        model = MuPLlama(args)
         if args.use_pretrained != "none":
             raise NotImplementedError(
                 f"Loading of pretrained models not yet implemented for model '{args.model}'."

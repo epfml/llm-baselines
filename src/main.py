@@ -9,10 +9,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import wandb
 
 import config
 import distributed
-import wandb
 from data.utils import DataReader, get_dataset
 from models.utils import get_model
 from optim.adafactor import Adafactor
@@ -20,18 +20,24 @@ from optim.adammini import Adam_mini
 from optim.ademamix import AdEMAMix
 from optim.ademamix2 import AdEMAMix2
 from optim.adopt import ADOPT
+from optim.adopt_ademamix import ADOPTAdEMAMix
 from optim.base import train
+from optim.cautious import (CautiousAdafactor, CautiousAdamW, CautiousAdEMAMix,
+                            CautiousADOPT, CautiousLion, CautiousMuon,
+                            CautiousSignum, CautiousSOAP, CautiousSophiaG)
 from optim.clipped import (AdagradClip, AdaGradClipDelayedEta, AdamClip,
                            AdamClipDelayedEta)
 from optim.lamb import Lamb
 from optim.lion import Lion
 from optim.mars import MARS
-from optim.muon import CombinedScheduler, Muon
+from optim.muon import CombinedScheduler, DistributedMuon, Muon
 from optim.normalized import NormalizedSGD
 from optim.prodigy import Prodigy
 from optim.schedule import (cos_inf_schedule, cosine_wsd_decay_schedule,
                             dd_schedule, wsd_schedule)
 from optim.schedulefree import AdamWScheduleFree, SGDScheduleFree
+from optim.scion import Scion, ScionLight, scion_partitions
+from optim.sgd_with_adam import SGDWithAdam, prepare_proj_params
 from optim.sgdf import SGDF
 from optim.shampoo import DistributedShampoo
 from optim.sign import Signum
@@ -100,7 +106,7 @@ def main(args, parser):
 
     model = distributed_backend.transform_model(model)
 
-    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
+    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs(config=args)
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
     optimized_params_cnt = 0
     for g in group_specs:
@@ -123,57 +129,130 @@ def main(args, parser):
     args.world_size = distributed_backend.get_world_size()
 
     if args.opt == "adamw":
-        device_type = "cuda" if "cuda" in args.device else "cpu"
-        use_fused = (device_type == "cuda") and (
-            "fused" in inspect.signature(torch.optim.AdamW).parameters
-        )
-        print(f"using fused AdamW: {use_fused}")
-        extra_args = dict(fused=True) if use_fused else dict()
-        opt = torch.optim.AdamW(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            weight_decay=args.weight_decay,
-            **extra_args,
-        )
+        if args.cautious:
+            opt = CautiousAdamW(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                correct_bias=args.correct_bias,
+            )
+        else:
+            device_type = "cuda" if "cuda" in args.device else "cpu"
+            use_fused = (device_type == "cuda") and (
+                "fused" in inspect.signature(torch.optim.AdamW).parameters
+            )
+            print(f"using fused AdamW: {use_fused}")
+            extra_args = dict(fused=True) if use_fused else dict()
+            opt = torch.optim.AdamW(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                **extra_args,
+            )
     elif args.opt == "soap":
-        opt = SOAP(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            shampoo_beta=args.shampoo_beta,
-            weight_decay=args.weight_decay,
-            precondition_frequency=args.precondition_frequency,
-            max_precond_dim=args.max_precond_dim,
-            merge_dims=args.merge_dims,
-            precondition_1d=args.precondition_1d,
-            normalize_grads=args.normalize_grads,
-            data_format=args.soap_data_format,
-            correct_bias=args.correct_bias,
-        )
+        if args.cautious:
+            opt = CautiousSOAP(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                shampoo_beta=args.shampoo_beta,
+                weight_decay=args.weight_decay,
+                precondition_frequency=args.precondition_frequency,
+                max_precond_dim=args.max_precond_dim,
+                merge_dims=args.merge_dims,
+                precondition_1d=args.precondition_1d,
+                normalize_grads=args.normalize_grads,
+                data_format=args.soap_data_format,
+                correct_bias=args.correct_bias,
+            )
+        else:
+            opt = SOAP(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                shampoo_beta=args.shampoo_beta,
+                weight_decay=args.weight_decay,
+                precondition_frequency=args.precondition_frequency,
+                max_precond_dim=args.max_precond_dim,
+                merge_dims=args.merge_dims,
+                precondition_1d=args.precondition_1d,
+                normalize_grads=args.normalize_grads,
+                data_format=args.soap_data_format,
+                correct_bias=args.correct_bias,
+            )
     elif args.opt == "muon":
         param_list = (
             list(model.parameters())
             if args.distributed_backend is None
             else list(model.module.parameters())
         )
-        assert (
-            sum(p.numel() for p in param_list) == params_cnt
-        ), "number of parameters must be the same"
-        opt = Muon(
-            muon_params=param_list,
-            lr=args.muon_lr_factor,
-            momentum=args.momentum,
-            nesterov=args.nesterov,
-            ns_steps=args.muon_ns_steps,
-            adamw_params=None,
-            adamw_lr=args.lr,
-            adamw_betas=(args.beta1, args.beta2),
-            adamw_eps=1e-8,
-            adamw_wd=args.weight_decay,
-        )
+        if args.cautious:
+            opt = CautiousMuon(
+                muon_params=param_list,
+                lr=args.muon_lr_factor,
+                momentum=args.momentum,
+                nesterov=args.nesterov,
+                ns_steps=args.muon_ns_steps,
+                adamw_params=None,
+                adamw_lr=args.lr,
+                adamw_betas=(args.beta1, args.beta2),
+                adamw_eps=1e-8,
+                adamw_wd=args.weight_decay,
+            )
+        else:
+            opt = Muon(
+                muon_params=param_list,
+                lr=args.muon_lr_factor,
+                momentum=args.momentum,
+                nesterov=args.nesterov,
+                ns_steps=args.muon_ns_steps,
+                adamw_params=None,
+                adamw_lr=args.lr,
+                adamw_betas=(args.beta1, args.beta2),
+                adamw_eps=1e-8,
+                adamw_wd=args.weight_decay,
+            )
+    elif args.opt == "d-muon":
+        if args.cautious:
+            raise NotImplementedError(
+                f"Since merging with the distributed muon implementation, CautiousMuon need to be re-implemented."
+            )
+        else:
+            opt = DistributedMuon(
+                group_specs,
+                lr=args.lr,
+                momentum=args.momentum,
+                nesterov=args.nesterov,
+                ns_steps=args.muon_ns_steps,
+                adamw_betas=(args.beta1, args.beta2),
+                adamw_eps=1e-8,
+                weight_decay=args.weight_decay,
+            )
     elif args.opt == "ademamix":
-        opt = AdEMAMix(
+        if args.cautious:
+            opt = CautiousAdEMAMix(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2, args.adema_beta3),
+                alpha=args.adema_alpha,
+                beta3_warmup=args.adema_beta3_warmup,
+                alpha_warmup=args.adema_alpha_warmup,
+                weight_decay=args.weight_decay,
+            )
+        else:
+            opt = AdEMAMix(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2, args.adema_beta3),
+                alpha=args.adema_alpha,
+                beta3_warmup=args.adema_beta3_warmup,
+                alpha_warmup=args.adema_alpha_warmup,
+                weight_decay=args.weight_decay,
+            )
+    elif args.opt == "adoptademamix":
+        opt = ADOPTAdEMAMix(
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2, args.adema_beta3),
@@ -181,24 +260,24 @@ def main(args, parser):
             beta3_warmup=args.adema_beta3_warmup,
             alpha_warmup=args.adema_alpha_warmup,
             weight_decay=args.weight_decay,
-        )
-    elif args.opt == "ademamix2":
-        opt = AdEMAMix2(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2, args.adema_beta3),
-            alpha=args.adema_alpha,
-            beta3_warmup=args.adema_beta3_warmup,
-            alpha_warmup=args.adema_alpha_warmup,
-            weight_decay=args.weight_decay,
+            eps=args.adopt_eps,
+            decouple=args.adopt_decouple,
         )
     elif args.opt == "lion":
-        opt = Lion(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            weight_decay=args.weight_decay,
-        )
+        if args.cautious:
+            opt = CautiousLion(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+            )
+        else:
+            opt = Lion(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+            )
     elif args.opt == "sf-adamw":
         opt = AdamWScheduleFree(
             group_specs,
@@ -234,25 +313,47 @@ def main(args, parser):
             verbose=args.adam_mini_verbose,
         )
     elif args.opt == "signsgd":
-        opt = Signum(
-            group_specs,
-            lr=args.lr,
-            momentum=0.0,  # always use zero momentum because its signSGD
-            dampening=args.dampening,
-            weight_decay=args.weight_decay,
-            nesterov=args.nesterov,
-            sign_update=True,
-        )
+        if args.cautious:
+            opt = CautiousSignum(
+                group_specs,
+                lr=args.lr,
+                momentum=0.0,  # always use zero momentum because its signSGD
+                dampening=args.dampening,
+                weight_decay=args.weight_decay,
+                nesterov=args.nesterov,
+                sign_update=True,
+            )
+        else:
+            opt = Signum(
+                group_specs,
+                lr=args.lr,
+                momentum=0.0,  # always use zero momentum because its signSGD
+                dampening=args.dampening,
+                weight_decay=args.weight_decay,
+                nesterov=args.nesterov,
+                sign_update=True,
+            )
     elif args.opt == "signum":
-        opt = Signum(
-            group_specs,
-            lr=args.lr,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-            dampening=args.dampening,
-            nesterov=args.nesterov,
-            sign_update=True,
-        )
+        if args.cautious:
+            opt = CautiousSignum(
+                group_specs,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                dampening=args.dampening,
+                nesterov=args.nesterov,
+                sign_update=True,
+            )
+        else:
+            opt = Signum(
+                group_specs,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                dampening=args.dampening,
+                nesterov=args.nesterov,
+                sign_update=True,
+            )
     elif args.opt == "sgdf":
         opt = SGDF(
             group_specs,
@@ -273,34 +374,48 @@ def main(args, parser):
             fsdp_in_use=args.prodigy_fsdp_in_use,
         )
     elif args.opt == "sophiag":
-        opt = SophiaG(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            weight_decay=args.weight_decay,
-            rho=args.sophia_rho,
-        )
+        if args.cautious:
+            opt = CautiousSophiaG(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                rho=args.sophia_rho,
+            )
+        else:
+            opt = SophiaG(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                weight_decay=args.weight_decay,
+                rho=args.sophia_rho,
+            )
     elif args.opt == "shampoo":
         opt = DistributedShampoo(
             group_specs,
             lr=args.lr,
             betas=(args.beta1, args.beta2),
-            precondition_frequency=args.precondition_frequency,
             weight_decay=args.weight_decay,
-            use_decoupled_weight_decay=True,
-            # grafting_config=AdamGraftingConfig(
-            #     beta2=args.beta2,  # oroginally, the default value is 0.999
-            #     epsilon=1e-8,
-            # ),
         )
     elif args.opt == "adopt":
-        opt = ADOPT(
-            group_specs,
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            eps=1e-6,
-            weight_decay=args.weight_decay,
-        )
+        if args.cautious:
+            opt = CautiousADOPT(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                eps=args.adopt_eps,
+                weight_decay=args.weight_decay,
+                decouple=args.adopt_decouple,
+            )
+        else:
+            opt = ADOPT(
+                group_specs,
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                eps=args.adopt_eps,  # 1e-6
+                weight_decay=args.weight_decay,
+                decouple=args.adopt_decouple,
+            )
     elif args.opt in [
         "clip-adagrad",
         "clip-adagrad-delay-eta",
@@ -353,14 +468,24 @@ def main(args, parser):
             weight_decay_1d=0.1,  # AdamW's weight decay
         )
     elif args.opt == "adafactor":
-        opt = Adafactor(
-            group_specs,
-            lr=args.lr,
-            decay_rate=args.adafactor_decay_rate,
-            beta1=args.beta1,
-            clip_threshold=1.0,
-            weight_decay=args.weight_decay,
-        )
+        if args.cautious:
+            opt = CautiousAdafactor(
+                group_specs,
+                lr=args.lr,
+                decay_rate=args.adafactor_decay_rate,
+                beta1=args.beta1,
+                clip_threshold=1.0,
+                weight_decay=args.weight_decay,
+            )
+        else:
+            opt = Adafactor(
+                group_specs,
+                lr=args.lr,
+                decay_rate=args.adafactor_decay_rate,
+                beta1=args.beta1,
+                clip_threshold=1.0,
+                weight_decay=args.weight_decay,
+            )
     elif args.opt == "lamb":
         opt = Lamb(
             group_specs,
@@ -378,16 +503,70 @@ def main(args, parser):
             dampening=args.dampening,
             weight_decay=args.weight_decay,
             nesterov=args.nesterov,
-            sign_update=False,
+            sign_update=args.sgd_sign_update,
         )
-    else:
-        opt = torch.optim.SGD(
-            group_specs,
-            lr=args.lr,
+    elif args.opt == "sgd-with-adam":
+        param_groups = prepare_proj_params(
+            model,
+            args,
+            proj_norms=args.proj_norms,
+            proj_embeds=args.proj_embeds,
+            proj_logits=args.proj_logits,
+        )
+        opt = SGDWithAdam(
+            param_groups,
+            lr=args.lr * args.sgd_lr_scale,
             momentum=args.momentum,
+            dampening=args.dampening,
             weight_decay=args.weight_decay,
             nesterov=args.nesterov,
+            sign=args.sgd_sign_update,
+            sign_norm=args.sign_norm,
+            normalized=args.normalized,
+            adam_lr=args.lr,
+            adam_betas=(args.beta1, args.beta2),
         )
+    elif args.opt == "scion":
+        scion_param_groups = scion_partitions(group_specs, model, args)
+        scion_params_cnt = sum(
+            p.numel() for group in scion_param_groups for p in group["params"]
+        )
+        print(f"Optimized parameters: {scion_params_cnt}")
+        opt = Scion(
+            scion_param_groups,
+            lr=args.lr,
+            momentum=args.momentum,
+        )
+    elif args.opt == "scion-light":
+        scion_param_groups = scion_partitions(group_specs, model, args)
+        scion_params_cnt = sum(
+            p.numel() for group in scion_param_groups for p in group["params"]
+        )
+        print(f"Optimized parameters: {scion_params_cnt}")
+        opt = ScionLight(
+            scion_param_groups,
+            lr=args.lr,
+            momentum=args.momentum,
+        )
+    else:
+        if args.cautious:
+            opt = CautiousSignum(
+                group_specs,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                dampening=args.dampening,
+                nesterov=args.nesterov,
+                sign_update=False,
+            )
+        else:
+            opt = torch.optim.SGD(
+                group_specs,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                nesterov=args.nesterov,
+            )
     print(f"\nOptimizer:\n{opt}")
 
     if args.scheduler != "none":
@@ -409,7 +588,7 @@ def main(args, parser):
                     anneal_strategy=args.scheduler,
                     cycle_momentum=False,
                     div_factor=1e2,
-                    final_div_factor=1,
+                    final_div_factor=args.final_div_factor,
                 )
                 if args.opt != "muon"
                 else CombinedScheduler(opt, args)
@@ -541,6 +720,7 @@ def get_exp_name(
         "full_eval_at",
         "distributed_backend",
         "latest_ckpt_interval",
+        "permanent_ckpt_interval",
         "wandb",
         "wandb_project",
         "wandb_entity",
@@ -549,6 +729,13 @@ def get_exp_name(
         "results_base_folder",
         "run_prefix",
         "wandb_run_prefix",
+        "proj_embeds",
+        "proj_norms",
+        "seed",
+        "device",
+        "adema_beta3_warmup",
+        "adema_alpha_warmup",
+        "plot_router_logits",
     ],
 ):
     # Get the default values
@@ -561,10 +748,12 @@ def get_exp_name(
     for key in key_args:
         if hasattr(args, key):
             value = getattr(args, key)
+            if key == "model" and hasattr(args, "moe") and args.moe:
+                value = f"moe_{value}"
             prefix_parts.append(f"{key}-{value}")
 
     prefix = "_".join(prefix_parts)
-    prefix = f"{args.batch_size}x{args.acc_steps}(rank={rank})_" + prefix
+    prefix = f"{args.batch_size}x{args.acc_steps}_" + prefix  # rank={rank}
 
     # Generate the rest of the string with non-default arguments
     non_default_parts = []

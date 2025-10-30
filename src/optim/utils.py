@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
+import wandb
 
 
 def get_batch(datareader, device="cpu"):
@@ -27,26 +28,61 @@ def eval(
     device="cpu",
     max_num_batches=24,
     ctx=nullcontext(),
+    moe=False,
+    get_router_logits=False,
     cfg=None,
 ):
     assert model.training == False
 
-    loss_list_val, acc_list = [], []
+    loss_list_val, acc_list, loss_list_aux_val = [], [], {}
+    router_logits = []
 
     for idx in range(max_num_batches):
         x, y = get_batch(reader, device=device)
         with ctx:
-            outputs = model(x, targets=y, get_logits=True)
+            outputs = model(x, targets=y, get_logits=True, moe=moe)
         val_loss = outputs["loss"]
 
         loss_list_val.append(val_loss)
         acc_list.append((outputs["logits"].argmax(-1) == y).float().mean())
 
+        # auxiliary losses are optional
+        for k, v in outputs["aux_losses"].items():
+            loss_list_aux_val[k] = loss_list_aux_val.get(k, [])
+            loss_list_aux_val[k].append(v)
+
+        # router logits for MoE visualization
+        if get_router_logits:
+            # shape [layers, batch_size * sequence_length, num_experts]
+            logits = outputs["router_logits"]
+            # shape [max_batches, layers, batch_size * sequence_length, num_experts]
+            router_logits.append(logits)
+
     val_acc = torch.stack(acc_list).mean().item()
     val_loss = torch.stack(loss_list_val).mean().item()
     val_perplexity = 2.71828**val_loss
+    val_aux_losses = {
+        f"val/{k}": torch.stack(v).mean().item() for k, v in loss_list_aux_val.items()
+    }
 
-    return val_acc, val_loss, val_perplexity
+    if get_router_logits:
+        # filter out the router logits that are not of the expected shape (happens for the last batch in
+        # dataloader has a different batch size than the others)
+        if cfg:
+            intended_size = cfg.batch_size * cfg.sequence_length
+        else:
+            intended_size = x.shape[0] * x.shape[1]
+        # shape [batches - 1, layers, batch_size * sequence_length, num_experts]
+        router_logits = (
+            torch.stack(
+                [rl for rl in router_logits if rl.shape[1] == intended_size],
+                dim=0,
+            )
+            .detach()
+            .cpu()
+        )
+
+    return val_acc, val_loss, val_perplexity, val_aux_losses, router_logits
 
 
 @torch.no_grad()
@@ -182,3 +218,73 @@ def load_worker_state(ckpt_dir: Path):
     torch.cuda.set_rng_state(worker_state["rng_torch_gpu"])
     np.random.set_state(worker_state["rng_np"])
     random.setstate(worker_state["rng_python"])
+
+
+def get_parameter_norms(model, order=2):
+    model_norm = 0
+    for p in model.parameters():
+        param_data = p.detach().data
+        if order == float("inf"):
+            param_norm = param_data.norm(p=order)
+            model_norm = max(model_norm, param_norm.item())
+        else:
+            param_norm = param_data.norm(p=order)
+            model_norm += param_norm.item() ** order
+
+    if order != float("inf"):
+        model_norm = model_norm ** (1.0 / order)
+
+    return model_norm
+
+
+def log_prodigy_lr(opt):
+    effective_lrs = []
+
+    for group in opt.param_groups:
+        d = group["d"]
+        lr = group["lr"]
+        if group["use_bias_correction"]:
+            k = group["k"]
+            beta1, beta2 = group["betas"]
+            bias_correction = ((1 - beta2 ** (k + 1)) ** 0.5) / (1 - beta1 ** (k + 1))
+        else:
+            bias_correction = 1
+        effective_lr = d * lr * bias_correction
+        effective_lrs.append(effective_lr)
+
+    return effective_lrs
+
+
+def visualize_routing(router_logits, extra_args):
+    # router_logits: [batches, layers, batch_size * sequence_length, num_experts]
+    logs = {}
+
+    n_layers = extra_args.n_layer
+    num_experts = extra_args.moe_num_experts
+    num_experts_per_tok = extra_args.moe_num_experts_per_tok
+
+    # histogram over all logits to see distribution
+    logs["router/logits"] = wandb.Histogram(
+        router_logits.type(torch.float32).flatten().cpu().numpy()
+    )
+
+    # distribution over experts for layer 0, layer n/2, n-1
+    for layer in [0, n_layers // 2, n_layers - 1]:
+        router_logits_layer = router_logits[:, layer]
+        # shape [batches, batch_size * sequence_length, num_experts_per_tok]
+        weights, selected_experts = torch.topk(
+            router_logits_layer, num_experts_per_tok, dim=-1
+        )
+        # shape [batches, batch_size * sequence_length, num_experts_per_tok, num_experts]
+        expert_mask = torch.nn.functional.one_hot(selected_experts, num_experts)
+        # For a given token, determine if it was routed to a given expert.
+        # Shape: [batches, batch_size * sequence_length, num_experts]
+        expert_mask, _ = torch.max(expert_mask, dim=-2)
+        # shape [num_experts]
+        tokens_per_expert = torch.mean(expert_mask, dim=(0, 1), dtype=torch.float32)
+        layer_token_routing = {
+            f"router/layer_{layer}_expert_{i}_selection": tokens_per_expert[i].item()
+            for i in range(num_experts)
+        }
+        logs.update(layer_token_routing)
+    return logs
