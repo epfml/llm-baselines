@@ -261,6 +261,7 @@ def parse_args(base_parser, args, namespace):
     )
     parser.add_argument("--bias", default=False, type=bool)
     parser.add_argument("--compile", action="store_true")
+    parser.add_argument("--untied_embeds", action="store_true") # disables weight tying between lm_head.weight and wte.weight
     parser.add_argument(
         "--mlp_dim_exp_factor", default=1.0, type=float
     )  # moe arguments

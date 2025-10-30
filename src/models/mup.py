@@ -181,9 +181,10 @@ class MuPGPTBase(nn.Module):
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = (
-            self.lm_head.weight
-        )  # https://paperswithcode.com/method/weight-tying
+        if not config.untied_embeds:
+            self.transformer.wte.weight = (
+                self.lm_head.weight
+            )  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
         self.apply(self._init_weights)
@@ -427,7 +428,7 @@ class MuPGPTBase(nn.Module):
                 raise NotImplementedError("Multiple paths -> load from dense.")
         super().load_state_dict(state_to_load)
 
-    def get_parameter_group_specs(self):
+    def get_parameter_group_specs(self, config):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -464,7 +465,12 @@ class MuPGPTBase(nn.Module):
         # will only return the first occurence, key'd by 'transformer.wte.weight', below.
         # so let's manually remove 'lm_head.weight' from decay set. This will include
         # this tensor into optimization via transformer.wte.weight only, and not decayed.
-        decay.remove("lm_head.weight")
+        # decay.remove("lm_head.weight") --- we handle this with config.untied_embeds
+        if config.untied_embeds:
+            decay.remove("lm_head.weight")
+            no_decay.add("lm_head.weight")
+        else:
+            decay.remove("lm_head.weight")
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}

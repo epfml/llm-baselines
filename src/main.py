@@ -106,7 +106,7 @@ def main(args, parser):
 
     model = distributed_backend.transform_model(model)
 
-    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
+    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs(config=args)
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
     optimized_params_cnt = 0
     for g in group_specs:
