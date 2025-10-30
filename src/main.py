@@ -106,7 +106,7 @@ def main(args, parser):
 
     model = distributed_backend.transform_model(model)
 
-    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs()
+    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs(config=args)
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
     optimized_params_cnt = 0
     for g in group_specs:
@@ -735,6 +735,7 @@ def get_exp_name(
         "device",
         "adema_beta3_warmup",
         "adema_alpha_warmup",
+        "plot_router_logits",
     ],
 ):
     # Get the default values
@@ -747,6 +748,8 @@ def get_exp_name(
     for key in key_args:
         if hasattr(args, key):
             value = getattr(args, key)
+            if key == "model" and hasattr(args, "moe") and args.moe:
+                value = f"moe_{value}"
             prefix_parts.append(f"{key}-{value}")
 
     prefix = "_".join(prefix_parts)

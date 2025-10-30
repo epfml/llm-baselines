@@ -1,7 +1,18 @@
 """
-This is a test model, namely a
-Llama style Language Model that is 
-compilable (avoids torch complex)
+Noam style Language Model with _MuP hyperparams transfer_.
+The changes to the normal Llama model are marked with 'mup change here!'.
+References:
+1) Llama inference code:
+https://github.com/facebookresearch/llama/blob/main/llama/model.py
+2) Mistral one file ref:
+https://github.com/mistralai/mistral-src/blob/main/one_file_ref.py
+3) Llama paper:
+https://arxiv.org/pdf/2302.13971.pdf
+
+Main differences of Llama from GPT2:
+* Uses RMSNorm instead of LayerNorm
+* Uses a slightly different MLP (SwiGLU)
+* rotary embeddings (RoPE)
 """
 
 import math
@@ -12,16 +23,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from models.base import CausalSelfAttention, GPTBase
-
-
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    cos_freqs = torch.cos(freqs)
-    sin_freqs = torch.sin(freqs)
-    # Stack the cos and sin parts in the last dimension to simulate complex numbers
-    return torch.stack((cos_freqs, sin_freqs), dim=-1)
+from models.llama import RMSNorm, precompute_freqs_cis
+from models.moe import MoE
 
 
 def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -61,28 +64,23 @@ def apply_rotary_emb(q, k, freqs_cis):
     return q_out, k_out
 
 
-class RMSNorm2(nn.Module):
-    def __init__(self, ndim, eps=1e-5, bias=False):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-        self.eps = eps
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, self.eps)
-
-
 class LlamaMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
 
         hidden_dim = config.n_embd * 4
+        hidden_dim = int(2 * hidden_dim / 3)
+        hidden_dim = config.multiple_of * (
+            (hidden_dim + config.multiple_of - 1) // config.multiple_of
+        )
 
         self.w1 = nn.Linear(config.n_embd, hidden_dim, bias=False)
+        self.w2 = nn.Linear(config.n_embd, hidden_dim, bias=False)
         self.c_proj = nn.Linear(hidden_dim, config.n_embd, bias=False)
 
     def forward(self, x):
-        return self.c_proj(nn.functional.gelu(self.w1(x)))
+        # tuple form because of aux loss from MoE
+        return self.c_proj(nn.functional.silu(self.w1(x)) * self.w2(x)), {}
 
 
 class LlamaAttention(CausalSelfAttention):
@@ -110,11 +108,17 @@ class LlamaAttention(CausalSelfAttention):
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+                q,
+                k,
+                v,
+                attn_mask=None,
+                dropout_p=self.dropout,
+                is_causal=True,
+                scale=1 / q.size(-1),  # mup change here!
             )
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * (1.0 / (k.size(-1)))  # mup change here!
             att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -131,19 +135,24 @@ class LlamaAttention(CausalSelfAttention):
 class LlamaBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = RMSNorm2(config.n_embd, eps=config.rmsnorm_eps)
+        self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
-        self.ln_2 = RMSNorm2(config.n_embd, eps=config.rmsnorm_eps)
-        self.mlp = LlamaMLP(config)
+        self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
+
+        if config.moe:
+            self.mlp = MoE(config, LlamaMLP)
+        else:
+            self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
         x = x + self.attn(self.ln_1(x), freqs_cis)
-        x_ = self.mlp(self.ln_2(x))
-        x = x + x_
-        return x
+        x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
+        x_, logits_and_experts = self.mlp(self.ln_2(x))
+        x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
+        return x, logits_and_experts
 
 
-class Test(GPTBase):
+class MupLlama(GPTBase):
     def __init__(self, config):
         super().__init__(config)
         assert config.vocab_size is not None
@@ -160,7 +169,7 @@ class Test(GPTBase):
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
-                ln_f=RMSNorm2(config.n_embd, eps=config.rmsnorm_eps),
+                ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),
             )
         )
 
@@ -169,9 +178,10 @@ class Test(GPTBase):
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = (
-            self.lm_head.weight
-        )  # https://paperswithcode.com/method/weight-tying
+        if not config.untied_embeds:
+            self.transformer.wte.weight = (
+                self.lm_head.weight
+            )  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
         self.apply(self._init_weights)
@@ -179,8 +189,22 @@ class Test(GPTBase):
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+                    p,
+                    mean=0.0,
+                    std=self.config.init_std
+                    / math.sqrt(
+                        2
+                        * config.n_layer
+                        * config.n_embd
+                        / self.config.scale_base_model
+                    ),  # mup change here!
                 )
+            if pn.endswith("router.weight"):
+                # special scaled init to moe router?
+                with torch.no_grad():
+                    std = p.std()
+                    p.div_(p.sum(dim=1, keepdim=True))
+                    p.mul_(std / p.std())
 
     def get_num_params(self, non_embedding=True):
         """
@@ -192,7 +216,7 @@ class Test(GPTBase):
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
 
-    def forward(self, idx, targets=None, get_logits=False):
+    def forward(self, idx, targets=None, get_logits=False, moe=False):
         device = idx.device
         b, t = idx.size()
         assert (
@@ -203,21 +227,47 @@ class Test(GPTBase):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        # pos_emb = self.transformer.wpe(pos)
 
-        x = self.transformer.drop(tok_emb)  # + pos_emb)
+        x = self.transformer.drop(tok_emb * self.config.scale_emb)  # mup change here!
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
+        # router logits is a list for each layer's routing, each of shape (b * seq_len, n_experts)
+        router_logits = []
+        # experts is a list for each layer's selected experts, shape (b * seq_len, topk)
+        experts = []
+
         for block in self.transformer.h:
-            x = block(x, freqs_cis=freqs_cis)
+            x, logits_and_experts = block(x, freqs_cis=freqs_cis)
+            if len(logits_and_experts) > 0:
+                router_logits.append(logits_and_experts["router_logits"])
+                experts.append(logits_and_experts["selected_experts"])
         x = self.transformer.ln_f(x)
 
+        # aux_losses is a dict with keys for different auxiliary losses
+        aux_losses = {}
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            logits = logits / (
+                self.config.n_embd / self.config.scale_base_model
+            )  # mup change here!
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
+            if moe and self.config.moe_routing == "standard_gating":
+                # calculate the router losses per layer
+                for logit, expert_choice in zip(router_logits, experts):
+                    router_losses = self.get_router_losses(
+                        logit, expert_choice, eval=not self.training
+                    )
+                    for k, v in router_losses.items():
+                        aux_losses[k] = aux_losses.get(k, 0.0) + v
+                        if self.training:
+                            loss += (
+                                v
+                                * getattr(self.config, k + "_factor")
+                                / self.config.n_layer
+                            )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -227,7 +277,13 @@ class Test(GPTBase):
 
         logits = logits if get_logits else None
 
+        router_logits = (
+            torch.stack(router_logits, dim=0) if len(router_logits) > 0 else None
+        )
+
         return {
             "logits": logits,
             "loss": loss,
+            "aux_losses": aux_losses,
+            "router_logits": router_logits,
         }

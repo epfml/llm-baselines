@@ -117,7 +117,7 @@ parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'm
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
 # Model params
-parser.add_argument('--model', default='base', choices=['base', 'llama', 'test'])
+parser.add_argument('--model', default='base', choices=['base', 'llama', 'mup_gpt', 'mup_llama', 'test'])
 parser.add_argument('--parallel_block', action='store_true')
 parser.add_argument('--use_pretrained', default='none', type=str) # 'none', 'gpt2' or a path to the pretraind model
 parser.add_argument('--from_dense', action='store_true')
@@ -133,6 +133,21 @@ parser.add_argument('--compile', action='store_true') # if true then model is co
 parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
 parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
 parser.add_argument('--n_kv_head', default=None, type=int) # for Adam-mini
+parser.add_argument('--moe', action='store_true')
+parser.add_argument('--moe_routing', default='standard_gating', type=str, choices=['standard_gating', 'expert_choice'],)
+parser.add_argument('--moe_num_experts', default=8, type=int)
+parser.add_argument('--capacity_factor', default=2.0, type=float) # only used for expert choice routing
+parser.add_argument('--moe_num_shared_experts', default=0, type=int) # deepseek routing, experts that are always active
+parser.add_argument('--moe_router_loss', default='load_balancing_z_loss', type=str, choices=['entropy', 'load_balancing_only', 'load_balancing_z_loss'],)
+parser.add_argument('--moe_num_experts_per_tok', default=2, type=int)
+parser.add_argument('--moe_entropy_loss_factor', default=0.01, type=float)
+parser.add_argument('--moe_aux_loss_factor', default=0.1, type=float)
+parser.add_argument('--moe_z_loss_factor', default=0.01, type=float)
+parser.add_argument('--moe_softmax_order', type=str, default='topk_softmax', choices=['softmax_topk', 'topk_softmax'],)
+parser.add_argument('--plot_router_logits', action='store_true')
+parser.add_argument('--scale_emb', default=10, type=int) # mup arguments --- the base model width that mup has been configured on
+parser.add_argument('--scale_base_model', default=256, type=int)
+parser.add_argument('--scale_depth', default=1.4, type=float)
 # Checkpointing
 parser.add_argument('--results_base_folder', default='./exps', type=str)
 parser.add_argument('--permanent_ckpt_interval', default=0, type=int)
@@ -187,6 +202,8 @@ src/
         utils.py    # contains the get_model function
         base.py     # contains the standard transformer base architecture
         llama.py    # llama architecture
+        mup.py # implementation of muP
+        mup_llama.py # muP-styled llama architecture
     optim/
         utils.py    # contains eval and get_batch functions
         base.py     # training function for the base and llama models
