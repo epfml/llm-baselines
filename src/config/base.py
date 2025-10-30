@@ -228,6 +228,8 @@ def parse_args(base_parser, args, namespace):
         choices=[
             "base",
             "llama",
+            "mup_gpt",
+            "mup_llama",
             "test",
         ],
     )
@@ -259,7 +261,9 @@ def parse_args(base_parser, args, namespace):
     )
     parser.add_argument("--bias", default=False, type=bool)
     parser.add_argument("--compile", action="store_true")
-    parser.add_argument("--mlp_dim_exp_factor", default=1.0, type=float)
+    parser.add_argument(
+        "--mlp_dim_exp_factor", default=1.0, type=float
+    )  # moe arguments
     parser.add_argument("--moe", action="store_true")
     parser.add_argument(
         "--moe_routing",
@@ -291,5 +295,10 @@ def parse_args(base_parser, args, namespace):
         choices=["softmax_topk", "topk_softmax"],
     )
     parser.add_argument("--plot_router_logits", action="store_true")
+    parser.add_argument(
+        "--scale_emb", default=10, type=int
+    )  # mup arguments --- the base model width that mup has been configured on
+    parser.add_argument("--scale_base_model", default=256, type=int)
+    parser.add_argument("--scale_depth", default=1.4, type=float)
 
     return parser.parse_args(args, namespace)

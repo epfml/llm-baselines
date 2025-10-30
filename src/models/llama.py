@@ -192,8 +192,16 @@ class Llama(GPTBase):
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer)
+                    p,
+                    mean=0.0,
+                    std=self.config.init_std / math.sqrt(2 * config.n_layer),
                 )
+            if pn.endswith("router.weight"):
+                # special scaled init to moe router?
+                with torch.no_grad():
+                    std = p.std()
+                    p.div_(p.sum(dim=1, keepdim=True))
+                    p.mul_(std / p.std())
 
     def get_num_params(self, non_embedding=True):
         """
