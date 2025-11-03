@@ -106,7 +106,9 @@ def main(args, parser):
 
     model = distributed_backend.transform_model(model)
 
-    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs(config=args)
+    group_specs = distributed_backend.get_raw_model(model).get_parameter_group_specs(
+        config=args
+    )
     param_name_mapping = {p_name: p for p_name, p in model.named_parameters()}
     optimized_params_cnt = 0
     for g in group_specs:
@@ -548,6 +550,17 @@ def main(args, parser):
             lr=args.lr,
             momentum=args.momentum,
         )
+    elif args.opt == "muon-pytorch":
+        opt = torch.optim.Muon(
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
+            nesterov=args.nesterov,
+            ns_steps=args.muon_ns_steps,
+            ns_coefficients=(3.4445, -4.775, 2.0315), # someone might try to change it later
+            eps=1e-7, # muon pytorch uses smaller eps
+            adjust_lr_fn=None, # to make the orthogonalized update have a consistent RMS across rectangular matrices
+        )
     else:
         if args.cautious:
             opt = CautiousSignum(
@@ -736,20 +749,36 @@ def get_exp_name(
         "adema_beta3_warmup",
         "adema_alpha_warmup",
         "plot_router_logits",
+        "weight_average",
+        "wa_interval",
+        "wa_horizon",
+        "wa_dtype",
+        "wa_use_temp_dir",
+        "wa_sweep_horizon",
+        "max_num_wa_sweeps",
+        "exponential_weight_average",
+        "ewa_interval",
+        "ewa_decay",
+        "ewa_after_warmup",
     ],
 ):
     # Get the default values
     defaults = vars(parser.parse_args([]))
 
-    rank = distributed_backend.rank
+    # rank = distributed_backend.rank # decided to remove rank from the exp name
 
     # Generate the prefix with key arguments
     prefix_parts = []
     for key in key_args:
         if hasattr(args, key):
             value = getattr(args, key)
-            if key == "model" and hasattr(args, "moe") and args.moe:
-                value = f"moe_{value}"
+            if key == "model":
+                if getattr(args, "moe", False):
+                    value = f"moe_{value}"
+                if getattr(args, "weight_average", False):
+                    value = f"{value}_WA"
+                if getattr(args, "exponential_weight_average", False):
+                    value = f"{value}_EWA"
             prefix_parts.append(f"{key}-{value}")
 
     prefix = "_".join(prefix_parts)

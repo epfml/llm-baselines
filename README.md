@@ -38,7 +38,7 @@ parser.add_argument('--seed', default=0, type=int) # random seed for the paramet
 parser.add_argument('--data_seed', default=1337, type=int) # random seed defining the data ordering
 parser.add_argument('--eval_interval', default=200, type=int)
 parser.add_argument('--full_eval_at', nargs="+", type=int)
-parser.add_argument('--eval_batches', default=32, type=int)
+parser.add_argument('--eval_batches', default=64, type=int)
 parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
 parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
 parser.add_argument('--warmup_steps', default=300, type=int)
@@ -54,7 +54,7 @@ parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
 parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
 parser.add_argument('--final_div_factor', default=1, type=float) # cosine and linear schedulers
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd', 'sgd-with-adam', 'scion', 'scion-light', 'd-muon'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd', 'sgd-with-adam', 'scion', 'scion-light', 'd-muon', 'muon-pytorch'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in nanoGPT
@@ -111,6 +111,18 @@ parser.add_argument('--scion_emb_scale', default=1.0, type=float)
 parser.add_argument('--scion_tr_scale', default=3.0, type=float)
 parser.add_argument('--weight_decay_scheduler', default=None, choices=['linear', 'cos', 'stable-decay', 'wsd'],)
 parser.add_argument('--final_weight_decay', default=0.1, type=float)
+parser.add_argument('--weight_average', action='store_true') # uniform weight averaging (or SWA)
+parser.add_argument('--wa_interval', default=5, type=int, help='How often to take the average (every k steps). Must divide wa-horizon.')
+parser.add_argument('--wa_horizon', default=500, type=int, help='How frequently we save uniform model averages. Should divide '
++ 'latest-ckpt-interval, otherwise some points may not be saved ' + 'correctly.')
+parser.add_argument('--wa_dtype', default='float32', type=str, choices=['float32', 'float64'])
+parser.add_argument('--wa_use_temp_dir', action='store_true')
+parser.add_argument('--wa_sweep_horizon', action='store_true')
+parser.add_argument('--max_num_wa_sweeps', default=5, type=int)
+parser.add_argument('--exponential_weight_average', action='store_true') # EMA of weights
+parser.add_argument('--ewa_interval', default=10, type=int, help='How often to take the EWA average (every k steps).')
+parser.add_argument('--ewa_decay', default=0.95, type=float, help='EWA decay parameter (between 0.9 and 1).')
+parser.add_argument('--ewa_after_warmup', action='store_true', help='Start EWA after warmup steps.')
 # Dataset params
 parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu', 'c4'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])

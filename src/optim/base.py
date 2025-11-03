@@ -9,6 +9,8 @@ import wandb
 import yaml
 
 from logger.logger import DynamicsLogger
+from optim.weight_averaging import (ExponentialWeightAverager, WeightAverager,
+                                    eval_ewa, eval_wa)
 
 from .schedule import (update_weight_decay, wd_cosine_schedule,
                        wd_linear_schedule, wd_stable_decay_schedule,
@@ -60,6 +62,34 @@ def train(
         load_worker_state(ckpt_dir)
     else:
         curr_iter = 0
+
+    if cfg.weight_average:
+        # This does generally not support resuming training, but will work if
+        # cfg.wa_interval perfectly divides the iteration number of the chkpt.
+        # Otherwise, the first avg will not be correctly computed, with a bias
+        # towards the first sample and missing values for earlier iterations.
+        weight_averager = WeightAverager(
+            not_compiled_model,
+            horizon=cfg.wa_horizon,
+            interval=cfg.wa_interval,
+            save_dir=None if cfg.wa_use_temp_dir else exp_dir / "avgs",
+            dtype={
+                "float32": torch.float32,
+                "float64": torch.float64,
+            }[cfg.wa_dtype],
+            count=curr_iter,
+        )
+    if cfg.exponential_weight_average:
+        ewa = ExponentialWeightAverager(
+            not_compiled_model,
+            interval=cfg.ewa_interval,
+            decay=cfg.ewa_decay,
+            warmup=cfg.warmup_steps if cfg.ewa_after_warmup else 0,
+            dtype={
+                "float32": torch.float32,
+                "float64": torch.float64,
+            }[cfg.wa_dtype],
+        )
 
     if distributed_backend.is_master_process() and cfg.log_dynamics:
         with open(cfg.dynamics_logger_cfg, "r") as f:
@@ -115,6 +145,30 @@ def train(
                 opt,
                 full_eval=(curr_iter in cfg.full_eval_at),
             )
+
+            if curr_iter > cfg.wa_interval and cfg.weight_average:
+                eval_wa(
+                    curr_iter,
+                    not_compiled_model,
+                    weight_averager,
+                    val_reader,
+                    type_ctx,
+                    distributed_backend,
+                    cfg,
+                    full_eval=(curr_iter in cfg.full_eval_at),
+                )
+
+            if cfg.exponential_weight_average:
+                eval_ewa(
+                    curr_iter,
+                    not_compiled_model,
+                    ewa,
+                    val_reader,
+                    type_ctx,
+                    distributed_backend,
+                    cfg,
+                    full_eval=(curr_iter in cfg.full_eval_at),
+                )
 
         if curr_iter == cfg.iterations:
             # Save checkpoints and evaluate at final iteration, but no need to train further
@@ -216,6 +270,13 @@ def train(
             opt.update_last_grad()
         else:
             opt.zero_grad(set_to_none=True)
+
+        if cfg.weight_average:
+            weight_averager.step(
+                not_compiled_model, distributed_backend.is_master_process()
+            )
+        if cfg.exponential_weight_average:
+            ewa.step(not_compiled_model, distributed_backend.is_master_process())
 
         dt = (time.perf_counter_ns() - t_start) / 1e9
 
