@@ -550,6 +550,17 @@ def main(args, parser):
             lr=args.lr,
             momentum=args.momentum,
         )
+    elif args.opt == "muon-pytorch":
+        opt = torch.optim.Muon(
+            group_specs,
+            lr=args.lr,
+            momentum=args.momentum,
+            nesterov=args.nesterov,
+            ns_steps=args.muon_ns_steps,
+            ns_coefficients=(3.4445, -4.775, 2.0315), # someone might try to change it later
+            eps=1e-7, # muon pytorch uses smaller eps
+            adjust_lr_fn=None, # to make the orthogonalized update have a consistent RMS across rectangular matrices
+        )
     else:
         if args.cautious:
             opt = CautiousSignum(
