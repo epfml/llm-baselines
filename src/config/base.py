@@ -191,6 +191,52 @@ def parse_args(base_parser, args, namespace):
         choices=["linear", "cos", "stable-decay", "wsd"],
     )
     parser.add_argument("--final_weight_decay", default=0.1, type=float)
+    parser.add_argument(
+        "--weight_average", action="store_true"
+    )  # uniform weight averaging (or SWA)
+    parser.add_argument(
+        "--wa_interval",
+        default=5,
+        type=int,
+        help="How often to take the average (every k steps). Must divide wa-horizon.",
+    )
+    parser.add_argument(
+        "--wa_horizon",
+        default=500,
+        type=int,
+        help="How frequently we save uniform model averages. Should divide "
+        + "latest-ckpt-interval, otherwise some points may not be saved "
+        + "correctly.",
+    )
+    parser.add_argument(
+        "--wa_dtype",
+        default="float32",
+        type=str,
+        choices=["float32", "float64"],
+    )
+    parser.add_argument("--wa_use_temp_dir", action="store_true")
+    parser.add_argument("--wa_sweep_horizon", action="store_true")
+    parser.add_argument("--max_num_wa_sweeps", default=5, type=int)
+    parser.add_argument(
+        "--exponential_weight_average", action="store_true"
+    )  # EMA of weights
+    parser.add_argument(
+        "--ewa_interval",
+        default=10,
+        type=int,
+        help="How often to take the EWA average (every k steps).",
+    )
+    parser.add_argument(
+        "--ewa_decay",
+        default=0.95,
+        type=float,
+        help="EWA decay parameter (between 0.9 and 1).",
+    )
+    parser.add_argument(
+        "--ewa_after_warmup",
+        action="store_true",
+        help="Start EWA after warmup steps.",
+    )
 
     # Dataset params
     parser.add_argument("--datasets_dir", type=str, default="./src/data/datasets/")
@@ -261,7 +307,9 @@ def parse_args(base_parser, args, namespace):
     )
     parser.add_argument("--bias", default=False, type=bool)
     parser.add_argument("--compile", action="store_true")
-    parser.add_argument("--untied_embeds", action="store_true") # disables weight tying between lm_head.weight and wte.weight
+    parser.add_argument(
+        "--untied_embeds", action="store_true"
+    )  # disables weight tying between lm_head.weight and wte.weight
     parser.add_argument(
         "--mlp_dim_exp_factor", default=1.0, type=float
     )  # moe arguments

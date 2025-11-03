@@ -133,9 +133,9 @@ class Block(nn.Module):
             elif config.moe_routing == "expert_choice":
                 self.mlp = ExpertChoiceMoE(config, MLP)
             elif config.moe_routing == "soft_moe":
-                self.mlp = SoftMoE(config, MLP) # TODO not implemented yet
+                self.mlp = SoftMoE(config, MLP)  # TODO not implemented yet
             elif config.moe_routing == "tree":
-                self.mlp = TreeRouter(config, MLP) # TODO not implemented yet
+                self.mlp = TreeRouter(config, MLP)  # TODO not implemented yet
             else:
                 raise ValueError(f"Unknown routing: {config.routing}")
         else:
