@@ -121,11 +121,21 @@ def main(args, parser):
         g["params"] = params
         optimized_params_cnt += sum([p.numel() for p in g["params"]])
     params_cnt = distributed_backend.get_raw_model(model).get_num_params()
+    nonemb_param_cnt = (
+        params_cnt
+        - distributed_backend.get_raw_model(model).lm_head.weight.numel()
+        - distributed_backend.get_raw_model(model).transformer.wte.weight.numel()
+    )
     print("number of parameters: %.2fM" % (params_cnt / 1e6,))
     print("number of optimized parameters: %.2fM" % (optimized_params_cnt / 1e6,))
+    print("number of non-embedding parameters: %.2fM" % (nonemb_param_cnt / 1e6,))
     if args.wandb and distributed_backend.is_master_process():
         wandb.log(
-            {"parameters": params_cnt, "optimized_parameters": optimized_params_cnt}
+            {
+                "parameters": params_cnt,
+                "optimized_parameters": optimized_params_cnt,
+                "non_embedding_parameters": nonemb_param_cnt,
+            }
         )
 
     args.world_size = distributed_backend.get_world_size()
@@ -750,16 +760,17 @@ def get_exp_name(
         "adema_alpha_warmup",
         "plot_router_logits",
         "weight_average",
-        "wa_interval",
-        "wa_horizon",
+        # "wa_interval",
+        # "wa_horizon",
         "wa_dtype",
         "wa_use_temp_dir",
         "wa_sweep_horizon",
-        "max_num_wa_sweeps",
+        # "max_num_wa_sweeps",
         "exponential_weight_average",
-        "ewa_interval",
-        "ewa_decay",
-        "ewa_after_warmup",
+        # "ewa_interval",
+        # "ewa_decay",
+        # "ewa_after_warmup",
+        "moe",
     ],
 ):
     # Get the default values

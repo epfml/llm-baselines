@@ -141,7 +141,8 @@ parser.add_argument('--n_embd', default=768, type=int) # hidden size ...
 parser.add_argument('--sequence_length', default=512, type=int)
 parser.add_argument('--dtype', default='bfloat16', type=str, choices=['float32', 'float16', 'bfloat16'],)
 parser.add_argument('--bias', default=False, type=bool)
-parser.add_argument('--compile', action='store_true') # if true then model is compiled 
+parser.add_argument('--compile', action='store_true') # if true then model is compiled
+ parser.add_argument('--untied_embeds', action='store_true') # disables weight tying between lm_head.weight and wte.weight
 parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
 parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
 parser.add_argument('--n_kv_head', default=None, type=int) # for Adam-mini
