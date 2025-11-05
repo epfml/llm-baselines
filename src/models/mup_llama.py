@@ -144,15 +144,18 @@ class LlamaBlock(nn.Module):
         else:
             self.mlp = LlamaMLP(config)
 
+        self.scale_depth = config.scale_depth
+        self.n_layer = config.n_layer
+
     def forward(self, x, freqs_cis):
-        x = x + self.attn(self.ln_1(x), freqs_cis)
+        x_ = self.attn(self.ln_1(x), freqs_cis)
         x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
         x_, logits_and_experts = self.mlp(self.ln_2(x))
         x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
         return x, logits_and_experts
 
 
-class MupLlama(GPTBase):
+class MuPLlama(GPTBase):
     def __init__(self, config):
         super().__init__(config)
         assert config.vocab_size is not None
