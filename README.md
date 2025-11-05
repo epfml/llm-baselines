@@ -124,7 +124,7 @@ parser.add_argument('--ewa_interval', default=10, type=int, help='How often to t
 parser.add_argument('--ewa_decay', default=0.95, type=float, help='EWA decay parameter (between 0.9 and 1).')
 parser.add_argument('--ewa_after_warmup', action='store_true', help='Start EWA after warmup steps.')
 # Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'slimpajama_chunk1', 'fineweb', 'finewebedu', 'c4'])
+parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', 'shakespeare-char', 'arxiv', 'arxiv2000', 'arxiv+wiki', 'openwebtext2', 'redpajama', 'redpajamav2', 'fineweb', 'finewebedu', 'c4', 'arc_easy', 'arc_challenge', 'hellaswag', 'logiqa', 'piqa', 'sciq', 'humaneval', 'gsm8k', 'kodcode', 'mathqa', 'medqa'])
 parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'mistral'])
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  

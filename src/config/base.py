@@ -258,6 +258,17 @@ def parse_args(base_parser, args, namespace):
             "fineweb",
             "finewebedu",
             "c4",
+            "arc_easy",  # benchmark tasks below...
+            "arc_challenge",
+            "hellaswag",
+            "logiqa",
+            "piqa",
+            "sciq",
+            "humaneval",
+            "gsm8k",
+            "kodcode",
+            "mathqa",
+            "medqa",
         ],
     )
     parser.add_argument(

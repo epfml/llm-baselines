@@ -143,7 +143,7 @@ def eval_wa(
             ),
             ctx=type_ctx,
             moe=cfg.moe,
-            get_router_logits=False, # we dont track router logits for WA
+            get_router_logits=False,  # we dont track router logits for WA
             cfg=cfg,
         )
 
@@ -205,7 +205,7 @@ def eval_wa(
                     "final-val/loss_wa": losses[0][0],
                     "final-val/perplexity_wa": 2.71828 ** losses[0][0],
                     "final-val/best_loss_wa": best_loss,
-                    "final-val/best_perplexity_wa": 2.71828 ** best_loss,
+                    "final-val/best_perplexity_wa": 2.71828**best_loss,
                 }
             else:
                 logs = {
@@ -213,7 +213,7 @@ def eval_wa(
                     "val/loss_wa": losses[0][0],
                     "val/perplexity_wa": 2.71828 ** losses[0][0],
                     "val/best_loss_wa": best_loss,
-                    "val/best_perplexity_wa": 2.71828 ** best_loss,
+                    "val/best_perplexity_wa": 2.71828**best_loss,
                     "wa_best_horizon": best_horizon,
                 }
             wandb.log(logs)
@@ -311,7 +311,7 @@ def eval_ewa(
         ),
         ctx=type_ctx,
         moe=cfg.moe,
-        get_router_logits=False, # we dont track router logits for EWA
+        get_router_logits=False,  # we dont track router logits for EWA
         cfg=cfg,
     )
 
