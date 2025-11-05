@@ -118,7 +118,7 @@ def parse_args(base_parser, args, namespace):
             "scion",
             "scion-light",
             "d-muon",
-            "muon-pytorch", # works only with torch>=2.9
+            "muon-pytorch",  # works only with torch>=2.9
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
