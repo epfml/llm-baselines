@@ -6,6 +6,7 @@ import torch
 import torch.distributed as dist
 
 from .arxiv import get_arxiv_2000, get_arxiv_full
+from .benchmarks import SUPPORTED_TASK_MAP
 from .c4 import get_c4_data
 from .fineweb import get_fineweb_data
 from .fineweb_edu import get_fineweb_edu_data
@@ -49,8 +50,23 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         return get_fineweb_edu_data(args.datasets_dir)
     if args.dataset == "c4":
         return get_c4_data(args.datasets_dir)
+    if args.dataset in SUPPORTED_TASK_MAP:
+        return get_benchmark_task(args.dataset)
     else:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")
+
+
+def get_benchmark_task(name, **kwargs):
+    """Fetch the right benchmark task given by the name parameter. The logic for each task is
+    contained in its own python file.
+    """
+    try:
+        fn = SUPPORTED_TASK_MAP[name]
+    except KeyError:
+        raise ValueError(
+            f"Unknown dataset '{name}'. Supported: {sorted(SUPPORTED_TASK_MAP.keys())}"
+        )
+    return fn(**kwargs)
 
 
 class DataReader:

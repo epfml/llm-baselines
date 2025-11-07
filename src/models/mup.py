@@ -149,7 +149,7 @@ class Block(nn.Module):
             x_ffn, logits_and_experts = self.mlp(x_ln)
             x = x + x_attn + x_ffn
         else:
-            x = x + self.attn(self.ln_1(x, *args, **kwargs))
+            x_ = self.attn(self.ln_1(x, *args, **kwargs))
             # mup change here!
             x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)
             x_, logits_and_experts = self.mlp(self.ln_2(x, *args, **kwargs))

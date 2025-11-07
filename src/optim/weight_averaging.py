@@ -132,7 +132,7 @@ def eval_wa(
         return
     if not cfg.wa_sweep_horizon:
         val_reader.set_step(0)
-        val_acc, val_loss, val_perplexity = eval(
+        val_acc, val_loss, val_perplexity, _, _ = eval(
             weight_averager.get_latest_like(model).eval(),
             val_reader,
             cfg.device,
@@ -142,6 +142,8 @@ def eval_wa(
                 else cfg.eval_batches
             ),
             ctx=type_ctx,
+            moe=cfg.moe,
+            get_router_logits=False,  # we dont track router logits for WA
             cfg=cfg,
         )
 
@@ -174,7 +176,7 @@ def eval_wa(
         ):
             avg_model.eval()
             val_reader.set_step(0)
-            _, val_loss, _ = eval(
+            _, val_loss, _, _, _ = eval(
                 avg_model,
                 val_reader,
                 cfg.device,
@@ -184,6 +186,8 @@ def eval_wa(
                     else cfg.eval_batches
                 ),
                 ctx=type_ctx,
+                moe=cfg.moe,
+                get_router_logits=False,
                 cfg=cfg,
             )
 
@@ -296,7 +300,7 @@ def eval_ewa(
         return
 
     val_reader.set_step(0)
-    val_acc, val_loss, val_perplexity = eval(
+    val_acc, val_loss, val_perplexity, _, _ = eval(
         ewa.get_latest_like(model).eval(),
         val_reader,
         cfg.device,
@@ -306,6 +310,8 @@ def eval_ewa(
             else cfg.eval_batches
         ),
         ctx=type_ctx,
+        moe=cfg.moe,
+        get_router_logits=False,  # we dont track router logits for EWA
         cfg=cfg,
     )
 
@@ -324,6 +330,8 @@ def eval_ewa(
                 "val/perplexity_ewa": val_perplexity,
                 "val/acc_ewa": val_acc,
             }
+        if cfg.moe and cfg.plot_router_logits:
+            pass
         wandb.log(logs)
     print(
         f">EWA Eval: Iter={curr_iter} "

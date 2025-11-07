@@ -118,7 +118,7 @@ def parse_args(base_parser, args, namespace):
             "scion",
             "scion-light",
             "d-muon",
-            "muon-pytorch", # works only with torch>=2.9
+            "muon-pytorch",  # works only with torch>=2.9
         ],
     )
     parser.add_argument("--batch_size", default=50, type=int)
@@ -258,6 +258,17 @@ def parse_args(base_parser, args, namespace):
             "fineweb",
             "finewebedu",
             "c4",
+            "arc_easy",  # benchmark tasks below...
+            "arc_challenge",
+            "hellaswag",
+            "logiqa",
+            "piqa",
+            "sciq",
+            "humaneval",
+            "gsm8k",
+            "kodcode",
+            "mathqa",
+            "medqa",
         ],
     )
     parser.add_argument(
