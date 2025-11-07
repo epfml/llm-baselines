@@ -1,5 +1,7 @@
 """
 Here is an original implementation of Muon and Distributed Muon. 
+_Note_ that 'class Muon'  is an old version which does not include weight decay for matrix params
+the newer version with weight decay is in the 'class DistributedMuon'.
 Source: https://github.com/KellerJordan/modded-nanogpt
 Source: https://github.com/toothacher17/Megatron-LM/tree/moonshot/distributedmuon-impl
 """
@@ -11,7 +13,7 @@ from typing import Dict, Tuple
 import torch
 import torch.distributed as dist
 
-from .schedule import cos_inf_schedule, cosine_wsd_decay_schedule, wsd_schedule
+from .schedule import cos_inf_schedule, wsd_schedule
 
 
 # copy from https://github.com/KellerJordan/Muon/tree/master
@@ -691,18 +693,6 @@ class CombinedScheduler:
                     fract_decay=cfg.wsd_fract_decay,
                     init_div_factor=1e2,
                     final_lr_factor=cfg.wsd_final_lr_scale,
-                    decay_type=cfg.decay_type,
-                ),
-            ),
-            "cos_wsd": lambda opt, lr: torch.optim.lr_scheduler.LambdaLR(
-                opt,
-                cosine_wsd_decay_schedule(
-                    n_iterations=cfg.iterations,
-                    n_warmup=cfg.warmup_steps,
-                    anneal_end_factor=0.15,
-                    fract_decay=cfg.wsd_fract_decay,
-                    init_div_factor=1e2,
-                    final_lr_factor=0.1,
                     decay_type=cfg.decay_type,
                 ),
             ),
