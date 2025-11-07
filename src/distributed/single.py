@@ -4,6 +4,9 @@ from .backend import DistributedBackend
 
 
 class SinlgeNodeBackend(DistributedBackend):
+    def __init__(self, args):
+        super().__init__(args)
+        self.rank = 0
 
     def transform_model(self, model):
         return model

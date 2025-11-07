@@ -8,15 +8,16 @@ from tqdm import tqdm
 tknzr = tiktoken.get_encoding("gpt2")
 
 
-def get_openwebtext2_data(datasets_base_dir, num_proc=40):
-    """https://openwebtext2.readthedocs.io/en/latest/"""
-    OWT2_DATA_PATH = os.path.join(datasets_base_dir, "openwebtext2/")
-    if not os.path.exists(os.path.join(OWT2_DATA_PATH, "train.bin")):
-        os.makedirs(OWT2_DATA_PATH, exist_ok=True)
-        dataset = load_dataset("the_pile_openwebtext2")
+def get_c4_data(datasets_base_dir, num_proc=40):
+    """https://huggingface.co/datasets/allenai/c4"""
+    C4_DATA_PATH = os.path.join(datasets_base_dir, "c4/")
+    if not os.path.exists(os.path.join(C4_DATA_PATH, "train.bin")):
+        os.makedirs(C4_DATA_PATH, exist_ok=True)
+
+        dataset = load_dataset("allenai/c4", "en")
 
         split_dataset = dataset["train"].train_test_split(
-            test_size=0.0005, seed=2357, shuffle=True
+            test_size=0.0001, seed=2357, shuffle=True
         )
         split_dataset["val"] = split_dataset.pop("test")
 
@@ -34,7 +35,7 @@ def get_openwebtext2_data(datasets_base_dir, num_proc=40):
         # tokenize the dataset
         tokenized = split_dataset.map(
             process,
-            remove_columns=["text"],
+            remove_columns=["text", "timestamp", "url"],
             desc="tokenizing the splits",
             num_proc=num_proc,
         )
@@ -42,10 +43,10 @@ def get_openwebtext2_data(datasets_base_dir, num_proc=40):
         # concatenate all the ids in each dataset into one large file we can use for training
         for split, dset in tokenized.items():
             arr_len = np.sum(dset["len"])
-            filename = os.path.join(OWT2_DATA_PATH, f"{split}.bin")
+            filename = os.path.join(C4_DATA_PATH, f"{split}.bin")
             dtype = np.uint16  # (can do since enc.max_token_value == 50256 is < 2**16)
             arr = np.memmap(filename, dtype=dtype, mode="w+", shape=(arr_len,))
-            total_batches = 1024
+            total_batches = min(1024, len(dset))
 
             idx = 0
             for batch_idx in tqdm(range(total_batches), desc=f"writing {filename}"):
@@ -60,6 +61,10 @@ def get_openwebtext2_data(datasets_base_dir, num_proc=40):
             arr.flush()
 
     return {
-        "train": os.path.join(OWT2_DATA_PATH, "train.bin"),
-        "val": os.path.join(OWT2_DATA_PATH, "val.bin"),
+        "train": os.path.join(C4_DATA_PATH, "train.bin"),
+        "val": os.path.join(C4_DATA_PATH, "val.bin"),
     }
+
+
+if __name__ == "__main__":
+    get_c4_data("./datasets/")

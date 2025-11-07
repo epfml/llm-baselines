@@ -1,10 +1,12 @@
 """
-Full definition of a GPT Language Model, all of it in this single file.
+Full definition of a GPT Language Model __with mup parametrization__.
+The changes to the normal GPT-2 model are marked with 'mup change here!'.
 References:
 1) the official GPT-2 TensorFlow implementation released by OpenAI:
 https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+3) https://github.com/microsoft/mup/blob/main/examples/Transformer/model.py
 """
 
 import math
@@ -14,20 +16,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from models.base import LayerNorm
 from models.moe import (ExpertChoiceMoE, MoE, entropy_reg, load_balancing_loss,
                         router_z_loss)
-
-
-class LayerNorm(nn.Module):
-    """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
 class CausalSelfAttention(nn.Module):
@@ -79,11 +70,17 @@ class CausalSelfAttention(nn.Module):
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+                q,
+                k,
+                v,
+                attn_mask=None,
+                dropout_p=self.dropout,
+                is_causal=True,
+                scale=1 / q.size(-1),  # mup change here!
             )
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * (1.0 / (k.size(-1)))  # mup change here!
             att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -133,13 +130,16 @@ class Block(nn.Module):
             elif config.moe_routing == "expert_choice":
                 self.mlp = ExpertChoiceMoE(config, MLP)
             elif config.moe_routing == "soft_moe":
-                self.mlp = SoftMoE(config, MLP)  # TODO not implemented yet
+                self.mlp = SoftMoE(config, MLP)
             elif config.moe_routing == "tree":
-                self.mlp = TreeRouter(config, MLP)  # TODO not implemented yet
+                self.mlp = TreeRouter(config, MLP)
             else:
                 raise ValueError(f"Unknown routing: {config.routing}")
         else:
             self.mlp = MLP(config)
+
+        self.scale_depth = config.scale_depth  # mup change here!
+        self.n_layer = config.n_layer  # mup change here!
 
     def forward(self, x, *args, **kwargs):
         if self.parallel:
@@ -149,13 +149,16 @@ class Block(nn.Module):
             x_ffn, logits_and_experts = self.mlp(x_ln)
             x = x + x_attn + x_ffn
         else:
-            x = x + self.attn(self.ln_1(x, *args, **kwargs))
+            x_ = self.attn(self.ln_1(x, *args, **kwargs))
+            # mup change here!
+            x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)
             x_, logits_and_experts = self.mlp(self.ln_2(x, *args, **kwargs))
-            x = x + x_
+            # mup change here!
+            x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)
         return x, logits_and_experts
 
 
-class GPTBase(nn.Module):
+class MuPGPTBase(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.vocab_size is not None
@@ -191,7 +194,13 @@ class GPTBase(nn.Module):
                 torch.nn.init.normal_(
                     p,
                     mean=0.0,
-                    std=self.config.init_std / math.sqrt(2 * config.n_layer),
+                    std=self.config.init_std
+                    / math.sqrt(
+                        2
+                        * config.n_layer
+                        * config.n_embd
+                        / self.config.scale_base_model
+                    ),  # mup change here!
                 )
             if pn.endswith("router.weight"):
                 # special scaled init to moe router?
@@ -259,7 +268,8 @@ class GPTBase(nn.Module):
         pos_emb = self.transformer.wpe(
             pos
         )  # position embeddings of shape (1, t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        # mup change here!
+        x = self.transformer.drop((tok_emb + pos_emb) * self.config.scale_emb)
 
         # router logits is a list for each layer's routing, each of shape (b * seq_len, n_experts)
         router_logits = []
@@ -280,6 +290,8 @@ class GPTBase(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            # mup change here!
+            logits = logits / (self.config.n_embd / self.config.scale_base_model)
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
@@ -475,7 +487,13 @@ class GPTBase(nn.Module):
 
         # create the pytorch optimizer object
         return [
-            {"params": sorted(list(decay))},
+            {
+                "params": sorted(list(decay)),
+                "lr": self.config.lr
+                / (
+                    self.config.n_embd / self.config.scale_base_model
+                ),  # mup change here!
+            },
             {"params": sorted(list(no_decay)), "weight_decay": 0.0},
         ]
 

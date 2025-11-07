@@ -1,6 +1,18 @@
 """
-Llama style Language Model that is 
-compilable (avoids torch complex)
+Noam style Language Model with _MuP hyperparams transfer_.
+The changes to the normal Llama model are marked with 'mup change here!'.
+References:
+1) Llama inference code:
+https://github.com/facebookresearch/llama/blob/main/llama/model.py
+2) Mistral one file ref:
+https://github.com/mistralai/mistral-src/blob/main/one_file_ref.py
+3) Llama paper:
+https://arxiv.org/pdf/2302.13971.pdf
+
+Main differences of Llama from GPT2:
+* Uses RMSNorm instead of LayerNorm
+* Uses a slightly different MLP (SwiGLU)
+* rotary embeddings (RoPE)
 """
 
 import math
@@ -11,17 +23,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from models.base import CausalSelfAttention, GPTBase
+from models.llama import RMSNorm, precompute_freqs_cis
 from models.moe import MoE
-
-
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    cos_freqs = torch.cos(freqs)
-    sin_freqs = torch.sin(freqs)
-    # Stack the cos and sin parts in the last dimension to simulate complex numbers
-    return torch.stack((cos_freqs, sin_freqs), dim=-1)
 
 
 def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -59,20 +62,6 @@ def apply_rotary_emb(q, k, freqs_cis):
     k_out = torch.stack((k_cos, k_sin), dim=-1).reshape(k.shape).flatten(3)
 
     return q_out, k_out
-
-
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def _norm(self, x):
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x):
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
 
 
 class LlamaMLP(nn.Module):
@@ -119,11 +108,17 @@ class LlamaAttention(CausalSelfAttention):
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+                q,
+                k,
+                v,
+                attn_mask=None,
+                dropout_p=self.dropout,
+                is_causal=True,
+                scale=1 / q.size(-1),  # mup change here!
             )
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * (1.0 / (k.size(-1)))  # mup change here!
             att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -149,14 +144,18 @@ class LlamaBlock(nn.Module):
         else:
             self.mlp = LlamaMLP(config)
 
+        self.scale_depth = config.scale_depth
+        self.n_layer = config.n_layer
+
     def forward(self, x, freqs_cis):
-        x = x + self.attn(self.ln_1(x), freqs_cis)
+        x_ = self.attn(self.ln_1(x), freqs_cis)
+        x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
         x_, logits_and_experts = self.mlp(self.ln_2(x))
-        x = x + x_
+        x = x + x_ * self.scale_depth / math.sqrt(self.n_layer)  # mup change here!
         return x, logits_and_experts
 
 
-class Llama(GPTBase):
+class MuPLlama(GPTBase):
     def __init__(self, config):
         super().__init__(config)
         assert config.vocab_size is not None
@@ -195,7 +194,13 @@ class Llama(GPTBase):
                 torch.nn.init.normal_(
                     p,
                     mean=0.0,
-                    std=self.config.init_std / math.sqrt(2 * config.n_layer),
+                    std=self.config.init_std
+                    / math.sqrt(
+                        2
+                        * config.n_layer
+                        * config.n_embd
+                        / self.config.scale_base_model
+                    ),  # mup change here!
                 )
             if pn.endswith("router.weight"):
                 # special scaled init to moe router?
@@ -226,7 +231,7 @@ class Llama(GPTBase):
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
 
-        x = self.transformer.drop(tok_emb)
+        x = self.transformer.drop(tok_emb * self.config.scale_emb)  # mup change here!
         freqs_cis = self.freqs_cis.to(x.device)[pos]
 
         # router logits is a list for each layer's routing, each of shape (b * seq_len, n_experts)
@@ -246,6 +251,9 @@ class Llama(GPTBase):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            logits = logits / (
+                self.config.n_embd / self.config.scale_base_model
+            )  # mup change here!
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
