@@ -58,7 +58,7 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument(
         "--scheduler",
         default="cos",
-        choices=["linear", "cos", "wsd", "none", "cos_inf", "cos_wsd", "dd"],
+        choices=["linear", "cos", "wsd", "none", "cos_inf"],
     )
     parser.add_argument(
         "--final_div_factor", default=1, type=float
@@ -77,12 +77,6 @@ def parse_args(base_parser, args, namespace):
         default="linear",
         choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
     )
-    parser.add_argument(
-        "--dd_second_decay_type",
-        default="linear",
-        choices=["linear", "cosine", "exp", "miror_cosine", "square", "sqrt"],
-    )
-    parser.add_argument("--dd_first_lr_factor", default=1e-2, type=float)
 
     # Optimization
     parser.add_argument(
@@ -94,27 +88,17 @@ def parse_args(base_parser, args, namespace):
             "muon",
             "soap",
             "ademamix",
-            "adoptademamix",
             "lion",
             "sf-adamw",
             "sf-sgd",
-            "adam-mini",
             "signsgd",
             "signum",
-            "sgdf",
             "prodigy",
             "sophiag",
-            "shampoo",
             "adopt",
-            "clip-adagrad",
-            "clip-adagrad-delay-eta",
-            "clip-adam",
-            "clip-adam-delay-eta",
             "mars",
             "adafactor",
             "lamb",
-            "normalized-sgd",
-            "sgd-with-adam",
             "scion",
             "scion-light",
             "d-muon",
@@ -147,8 +131,6 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--adema_alpha_warmup", default=None, type=int)
     parser.add_argument("--schedulefree_r", default=0.0, type=float)
     parser.add_argument("--weight_lr_power", default=2.0, type=float)
-    parser.add_argument("--model_sharding", default=None, type=bool)
-    parser.add_argument("--adam_mini_verbose", default=False, type=bool)
     parser.add_argument("--dampening", default=0.0, type=float)
     parser.add_argument("--prodigy_beta3", default=None, type=float)
     parser.add_argument("--prodigy_decouple", default=True, type=bool)
@@ -173,25 +155,11 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument("--mars_beta2", default=0.99, type=float)
     parser.add_argument("--adafactor_decay_rate", default=-0.8, type=float)
     parser.add_argument("--lamb_use_bias_correction", default=False, type=bool)
-    parser.add_argument("--proj_norms", default=False, action="store_true")
-    parser.add_argument("--proj_embeds", default=False, action="store_true")
-    parser.add_argument("--proj_logits", default=False, action="store_true")
-    parser.add_argument("--sgd_sign_update", default=False, action="store_true")
-    parser.add_argument("--sign_norm", default=False, action="store_true")
-    parser.add_argument("--normalized", default=False, action="store_true")
-    parser.add_argument("--sgd_lr_scale", default=1.0, type=float)
     parser.add_argument("--adopt_decouple", default=True, type=bool)
     parser.add_argument("--adopt_eps", default=1e-6, type=float)
-    parser.add_argument("--cautious", default=False, type=bool)
     parser.add_argument("--scion_lmh_scale", default=10.0, type=float)
     parser.add_argument("--scion_emb_scale", default=1.0, type=float)
     parser.add_argument("--scion_tr_scale", default=3.0, type=float)
-    parser.add_argument(
-        "--weight_decay_scheduler",
-        default=None,
-        choices=["linear", "cos", "stable-decay", "wsd"],
-    )
-    parser.add_argument("--final_weight_decay", default=0.1, type=float)
     parser.add_argument(
         "--weight_average", action="store_true"
     )  # uniform weight averaging (or SWA)
@@ -288,7 +256,6 @@ def parse_args(base_parser, args, namespace):
             "llama",
             "mup_gpt",
             "mup_llama",
-            "test",
         ],
     )
     parser.add_argument("--parallel_block", action="store_true")

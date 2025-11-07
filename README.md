@@ -46,15 +46,13 @@ parser.add_argument('--lr', default=1e-3, type=float)
 parser.add_argument('--wsd_final_lr_scale', default=0.0, type=float) # wsd scheduler
 parser.add_argument('--wsd_fract_decay', default=0.1, type=float) # wsd scheduler 
 parser.add_argument('--decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
-parser.add_argument('--dd_second_decay_type', default='linear', choices=['linear', 'cosine', 'exp', 'miror_cosine', 'square', 'sqrt'])
-parser.add_argument('--dd_first_lr_factor', default=1e-2, type=float)
 parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
 parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
 parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none', 'dd'])
+parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'wsd', 'cos_inf', 'none'])
 parser.add_argument('--final_div_factor', default=1, type=float) # cosine and linear schedulers
 parser.add_argument('--cos_inf_steps', default=0, type=int) # cos_inf scheduler
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'ademamix2', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'sgdf', 'prodigy', 'sophiag', 'shampoo', 'adopt', 'clip-adagrad', 'clip-adagrad-delay-eta', 'clip-adam', 'clip-adam-delay-eta', 'mars', 'adafactor', 'lamb', 'normalized-sgd', 'sgd-with-adam', 'scion', 'scion-light', 'd-muon', 'muon-pytorch'])
+parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd', 'muon', 'soap', 'ademamix', 'lion', 'sf-adamw', 'sf-sgd', 'signsgd', 'signum', 'prodigy', 'sophiag', 'adopt', 'mars', 'adafactor', 'lamb', 'scion', 'scion-light', 'd-muon', 'muon-pytorch'])
 parser.add_argument('--eval_freq', default=200, type=int) # in iterations
 parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
 parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in nanoGPT
@@ -76,8 +74,6 @@ parser.add_argument('--adema_beta3_warmup', default=None, type=int) # AdEMAMix h
 parser.add_argument('--adema_alpha_warmup', default=None, type=int) # AdEMAMix hyperparameter
 parser.add_argument('--schedulefree_r', defalut=0.0, type=float) # schedulefree hyperparameter
 parser.add_argument('--weight_lr_power', default=2.0, type=float) # schedulefree hyperparameter
-parser.add_argument('--model_sharding', default=None, type=bool) # Adam-mini
-parser.add_argument('--adam_mini_verbose', default=False, type=bool) # print all the logs if true
 parser.add_argument('--log_interval', default=50, type=int)
 parser.add_argument('--dampening', default=0.0, type=float)
 parser.add_argument('--prodigy_beta3', default=None, type=float) # coefficients for computing the Prodidy stepsize using running averages
@@ -86,8 +82,6 @@ parser.add_argument('--prodigy_use_bias_correction', default=False, type=bool)
 parser.add_argument('--prodigy_safeguard_warmup', default=False, type=bool) # Remove lr from the denominator of D estimate to avoid issues during warm-up stage. Off by default.
 parser.add_argument('--prodigy_fsdp_in_use', default=False, type=bool)
 parser.add_argument('--sophia_rho', default=0.04, type=float)
-parser.add_argument('--clipping_type', default='no', choices=['no', 'local', 'elementwise']) # for methods with clipping
-parser.add_argument('--clipping_eta', default=1.0, type=float)
 parser.add_argument('--mars_type', default='mars-adamw', choices=['mars-adamw', 'mars-lion', 'mars-shampoo'],)
 parser.add_argument('--mars_vr_gamma', default=0.025, type=float)
 parser.add_argument('--mars_is_approx', default=True, type=float)
@@ -96,21 +90,11 @@ parser.add_argument('--mars_beta1', default=0.95, type=float)
 parser.add_argument('--mars_beta2', default=0.99, type=float)
 parser.add_argument('--adafactor_decay_rate', default=-0.8, type=float)
 parser.add_argument('--lamb_use_bias_correction', default=False, type=bool)
-parser.add_argument('--proj_norms', default=False, action='store_true') 
-parser.add_argument('--proj_embeds', default=False, action='store_true')
-parser.add_argument('--proj_logits', default=False, action='store_true')
-parser.add_argument('--sgd_sign_update', default=False, action='store_true')
-parser.add_argument('--sign_norm', default=False, action='store_true')
-parser.add_argument('--normalized', default=False, action='store_true')
-parser.add_argument('--sgd_lr_scale', default=1.0, type=float)
 parser.add_argument('--adopt_decouple', default=True, type=bool)
 parser.add_argument('--adopt_eps', default=1e-6, type=float)
-parser.add_argument('--cautious', default=False, type=bool) # whether to use cautious variant of optimizer with momentum 
 parser.add_argument('--scion_lmh_scale', default=10.0, type=float)
 parser.add_argument('--scion_emb_scale', default=1.0, type=float)
 parser.add_argument('--scion_tr_scale', default=3.0, type=float)
-parser.add_argument('--weight_decay_scheduler', default=None, choices=['linear', 'cos', 'stable-decay', 'wsd'],)
-parser.add_argument('--final_weight_decay', default=0.1, type=float)
 parser.add_argument('--weight_average', action='store_true') # uniform weight averaging (or SWA)
 parser.add_argument('--wa_interval', default=5, type=int, help='How often to take the average (every k steps). Must divide wa-horizon.')
 parser.add_argument('--wa_horizon', default=500, type=int, help='How frequently we save uniform model averages. Should divide '
@@ -129,7 +113,7 @@ parser.add_argument('--tokenizer', default='gpt2', type=str, choices=['gpt2', 'm
 parser.add_argument('--vocab_size', default=50304, type=int)
 parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
 # Model params
-parser.add_argument('--model', default='base', choices=['base', 'llama', 'mup_gpt', 'mup_llama', 'test'])
+parser.add_argument('--model', default='base', choices=['base', 'llama', 'mup_gpt', 'mup_llama',])
 parser.add_argument('--parallel_block', action='store_true')
 parser.add_argument('--use_pretrained', default='none', type=str) # 'none', 'gpt2' or a path to the pretraind model
 parser.add_argument('--from_dense', action='store_true')
@@ -145,7 +129,6 @@ parser.add_argument('--compile', action='store_true') # if true then model is co
  parser.add_argument('--untied_embeds', action='store_true') # disables weight tying between lm_head.weight and wte.weight
 parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
 parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
-parser.add_argument('--n_kv_head', default=None, type=int) # for Adam-mini
 parser.add_argument('--moe', action='store_true')
 parser.add_argument('--moe_routing', default='standard_gating', type=str, choices=['standard_gating', 'expert_choice'],)
 parser.add_argument('--moe_num_experts', default=8, type=int)
@@ -200,15 +183,17 @@ The structure of the project is the following:
 
 ```sh
 src/
-    main.py         # pick the right data, model, and training function
+    main.py         # pick the right data, model, optimizer, and training function
     config/
         __init__.py # contains CONFIG_FORMAT_TO_MODULE_MAP mapping the name given to the --config_format flag with a python conf file
         base.py     # config for the base model
     data/
         utils.py    # contains the get_dataset function
-        wikitext.py # load/process wikitext
-        arxiv.py    # load/process arxiv
+        fineweb.py # load/process fineweb
+        fineweb_edu.py    # load/process fineweb edu
         shakespeare.py # load/process the Shakespeare dataset
+        benchmarks.py # load/process benchs, e.g., hellaswag, gsm8k, arc_challenge
+        c4.py # load/process the c4 dataset
         slimpajama.py
         ...
     models/

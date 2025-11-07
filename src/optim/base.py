@@ -12,9 +12,6 @@ from logger.logger import DynamicsLogger
 from optim.weight_averaging import (ExponentialWeightAverager, WeightAverager,
                                     eval_ewa, eval_wa)
 
-from .schedule import (update_weight_decay, wd_cosine_schedule,
-                       wd_linear_schedule, wd_stable_decay_schedule,
-                       wd_wsd_schedule)
 from .utils import (eval, get_batch, get_parameter_norms, load_checkpoint,
                     load_worker_state, log_prodigy_lr, save_checkpoint,
                     save_worker_state, visualize_routing)
@@ -201,44 +198,6 @@ def train(
                 )
             grad_norms.append(grad_norm)
 
-        # weight decay scheduler
-        if cfg.weight_decay_scheduler:
-            if cfg.weight_decay_scheduler == "linear":
-                lambda_wd = wd_linear_schedule(
-                    n_iterations=cfg.iterations,
-                    init_wd=cfg.weight_decay,
-                    final_wd=cfg.final_weight_decay,
-                )
-            elif cfg.weight_decay_scheduler == "cos":
-                lambda_wd = wd_cosine_schedule(
-                    n_iterations=cfg.iterations,
-                    init_wd=cfg.weight_decay,
-                    final_wd=cfg.final_weight_decay,
-                )
-            elif cfg.weight_decay_scheduler == "stable-decay":
-                lambda_wd = wd_stable_decay_schedule(
-                    n_iterations=cfg.iterations,
-                    init_wd=cfg.weight_decay,
-                    final_wd=cfg.final_weight_decay,
-                    fract_decay=cfg.wsd_fract_decay,
-                    decay_type=cfg.decay_type,
-                )
-            elif cfg.weight_decay_scheduler == "wsd":
-                lambda_wd = wd_wsd_schedule(
-                    n_iterations=cfg.iterations,
-                    init_wd=cfg.weight_decay,
-                    final_wd=cfg.final_weight_decay,
-                    n_warmup=cfg.warmup_steps,
-                    init_div_factor=1e2,
-                    fract_decay=cfg.wsd_fract_decay,
-                    decay_type=cfg.decay_type,
-                )
-            else:
-                raise ValueError(f"scheduler type {cfg.scheduler_wd} not recognized.")
-
-            wd_term = lambda_wd(curr_iter)
-            update_weight_decay(opt, wd_term)
-
         if cfg.opt == "sf-sgd" or cfg.opt == "sf-adamw":
             opt.train()
         (
@@ -319,9 +278,6 @@ def train(
                     ),
                     **train_aux_losses,
                 }
-
-                if cfg.weight_decay_scheduler:
-                    wandb_logs["wd"] = opt.param_groups[0]["weight_decay"]
 
                 if cfg.opt == "prodigy":
                     wandb_logs["effective_lr"] = prodigy_efective_lrs[0]
